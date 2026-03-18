@@ -25,6 +25,24 @@ type LiftSettingRow = {
   current_weight: number | null;
 };
 
+type StoredLiftLog = {
+  name?: string;
+  working_weight?: number;
+  set_count?: number;
+  sets?: number[];
+  completed?: boolean;
+  next_weight?: number;
+} | null;
+
+type StrengthLogRow = {
+  id: string;
+  workout_day: string;
+  week_start_date: string;
+  lift_1: StoredLiftLog;
+  lift_2: StoredLiftLog;
+  lift_3: StoredLiftLog;
+};
+
 function Stepper({
   label,
   value,
@@ -76,21 +94,6 @@ function Stepper({
   );
 }
 
-function createLiftState(
-  name: string,
-  setCount: number,
-  workingWeight: number
-): LiftState {
-  return {
-    name,
-    working_weight: workingWeight,
-    set_count: setCount,
-    sets: Array(setCount).fill(0),
-    completed: false,
-    next_weight: workingWeight,
-  };
-}
-
 function calculateNextWeight(
   liftName: string,
   completed: boolean,
@@ -107,15 +110,68 @@ function calculateNextWeight(
   return completed ? current + 5 : Math.max(0, current - 5);
 }
 
+function createLiftState(
+  name: string,
+  setCount: number,
+  workingWeight: number
+): LiftState {
+  const sets = Array(setCount).fill(0);
+  const completed = sets.every((rep) => rep >= 5);
+
+  return {
+    name,
+    working_weight: workingWeight,
+    set_count: setCount,
+    sets,
+    completed,
+    next_weight: calculateNextWeight(name, completed, workingWeight),
+  };
+}
+
+function createLiftStateFromStoredLog(
+  fallbackName: string,
+  fallbackSetCount: number,
+  fallbackWeight: number,
+  storedLift: StoredLiftLog
+): LiftState {
+  const name = storedLift?.name || fallbackName;
+  const setCount = storedLift?.set_count || fallbackSetCount;
+  const workingWeight =
+    typeof storedLift?.working_weight === "number"
+      ? storedLift.working_weight
+      : fallbackWeight;
+
+  const rawSets = Array.isArray(storedLift?.sets) ? storedLift?.sets : [];
+  const sets = Array.from({ length: setCount }, (_, index) => {
+    const value = rawSets[index];
+    if (typeof value !== "number") return 0;
+    return Math.max(0, Math.min(5, value));
+  });
+
+  const completed = sets.every((rep) => rep >= 5);
+
+  return {
+    name,
+    working_weight: workingWeight,
+    set_count: setCount,
+    sets,
+    completed,
+    next_weight: calculateNextWeight(name, completed, workingWeight),
+  };
+}
+
 export default function StrengthClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [userId, setUserId] = useState("");
   const [profileName, setProfileName] = useState("");
+  const [existingLogId, setExistingLogId] = useState<string | null>(null);
+  const [baseWeights, setBaseWeights] = useState<Record<string, number>>({});
   const [lift1, setLift1] = useState<LiftState | null>(null);
   const [lift2, setLift2] = useState<LiftState | null>(null);
   const [lift3, setLift3] = useState<LiftState | null>(null);
@@ -144,69 +200,107 @@ export default function StrengthClient() {
 
       setUserId(user.id);
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("profile_name")
-        .eq("id", user.id)
-        .single();
+      const [{ data: profile }, { data: settings }, { data: existingLog }] =
+        await Promise.all([
+          supabase
+            .from("profiles")
+            .select("profile_name")
+            .eq("id", user.id)
+            .single(),
+          supabase
+            .from("lift_settings")
+            .select("lift_name, current_weight")
+            .eq("user_id", user.id),
+          supabase
+            .from("strength_logs")
+            .select("id, workout_day, week_start_date, lift_1, lift_2, lift_3")
+            .eq("user_id", user.id)
+            .eq("week_start_date", weekStartDate)
+            .eq("workout_day", dayKey)
+            .maybeSingle(),
+        ]);
 
       setProfileName(profile?.profile_name || "");
 
-      const { data: settings } = await supabase
-        .from("lift_settings")
-        .select("lift_name, current_weight")
-        .eq("user_id", user.id);
-
-      const settingsMap = new Map<string, number>();
-
+      const settingsMap: Record<string, number> = {};
       (settings || []).forEach((row: LiftSettingRow) => {
-        settingsMap.set(row.lift_name, row.current_weight || 0);
+        settingsMap[row.lift_name] = row.current_weight || 0;
       });
+      setBaseWeights(settingsMap);
 
       const first = workoutDefinition[0];
       const second = workoutDefinition[1];
       const third = workoutDefinition[2];
+      const log = (existingLog || null) as StrengthLogRow | null;
 
-      setLift1(
-        first
-          ? createLiftState(
-              first.name,
-              first.setCount,
-              settingsMap.get(first.name) || 0
-            )
-          : null
-      );
+      if (log) {
+        setExistingLogId(log.id);
+        setMessage("Existing log loaded. You can update or delete it.");
 
-      setLift2(
-        second
-          ? createLiftState(
-              second.name,
-              second.setCount,
-              settingsMap.get(second.name) || 0
-            )
-          : null
-      );
+        setLift1(
+          first
+            ? createLiftStateFromStoredLog(
+                first.name,
+                first.setCount,
+                settingsMap[first.name] || 0,
+                log.lift_1
+              )
+            : null
+        );
 
-      setLift3(
-        third
-          ? createLiftState(
-              third.name,
-              third.setCount,
-              settingsMap.get(third.name) || 0
-            )
-          : null
-      );
+        setLift2(
+          second
+            ? createLiftStateFromStoredLog(
+                second.name,
+                second.setCount,
+                settingsMap[second.name] || 0,
+                log.lift_2
+              )
+            : null
+        );
 
-      const { data: existingLog } = await supabase
-        .from("strength_logs")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("week_start_date", weekStartDate)
-        .eq("workout_day", dayKey)
-        .maybeSingle();
+        setLift3(
+          third
+            ? createLiftStateFromStoredLog(
+                third.name,
+                third.setCount,
+                settingsMap[third.name] || 0,
+                log.lift_3
+              )
+            : null
+        );
+      } else {
+        setExistingLogId(null);
 
-      if (existingLog) {
-        setMessage("You already submitted this workout for this week.");
+        setLift1(
+          first
+            ? createLiftState(
+                first.name,
+                first.setCount,
+                settingsMap[first.name] || 0
+              )
+            : null
+        );
+
+        setLift2(
+          second
+            ? createLiftState(
+                second.name,
+                second.setCount,
+                settingsMap[second.name] || 0
+              )
+            : null
+        );
+
+        setLift3(
+          third
+            ? createLiftState(
+                third.name,
+                third.setCount,
+                settingsMap[third.name] || 0
+              )
+            : null
+        );
       }
 
       setLoading(false);
@@ -214,8 +308,6 @@ export default function StrengthClient() {
 
     loadPage();
   }, [dayKey, router, weekStartDate, workoutDefinition]);
-
-  const alreadySubmitted = message.includes("already submitted");
 
   function updateSet(
     lift: LiftState | null,
@@ -225,11 +317,10 @@ export default function StrengthClient() {
   ) {
     if (!lift) return;
 
-    const maxReps = 5;
     const nextSets = [...lift.sets];
-    nextSets[index] = Math.max(0, Math.min(maxReps, value));
+    nextSets[index] = Math.max(0, Math.min(5, value));
 
-    const completed = nextSets.every((rep) => rep >= maxReps);
+    const completed = nextSets.every((rep) => rep >= 5);
     const nextWeight = calculateNextWeight(
       lift.name,
       completed,
@@ -242,6 +333,32 @@ export default function StrengthClient() {
       completed,
       next_weight: nextWeight,
     });
+  }
+
+  function resetLiftsToDefaultWeights() {
+    const first = workoutDefinition[0];
+    const second = workoutDefinition[1];
+    const third = workoutDefinition[2];
+
+    setLift1(
+      first
+        ? createLiftState(first.name, first.setCount, baseWeights[first.name] || 0)
+        : null
+    );
+    setLift2(
+      second
+        ? createLiftState(
+            second.name,
+            second.setCount,
+            baseWeights[second.name] || 0
+          )
+        : null
+    );
+    setLift3(
+      third
+        ? createLiftState(third.name, third.setCount, baseWeights[third.name] || 0)
+        : null
+    );
   }
 
   async function handleSave() {
@@ -264,11 +381,30 @@ export default function StrengthClient() {
         lift_3: lift3,
       };
 
-      const { error: logError } = await supabase
-        .from("strength_logs")
-        .insert(strengthPayload);
+      if (existingLogId) {
+        const { error: updateError } = await supabase
+          .from("strength_logs")
+          .update(strengthPayload)
+          .eq("id", existingLogId);
 
-      if (logError) throw logError;
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from("strength_logs")
+          .insert(strengthPayload);
+
+        if (insertError) throw insertError;
+
+        const { data: refreshedLog } = await supabase
+          .from("strength_logs")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("week_start_date", weekStartDate)
+          .eq("workout_day", dayKey)
+          .maybeSingle();
+
+        setExistingLogId(refreshedLog?.id || null);
+      }
 
       const upserts = [lift1, lift2, lift3]
         .filter((lift): lift is LiftState => Boolean(lift))
@@ -286,7 +422,15 @@ export default function StrengthClient() {
 
       if (settingsError) throw settingsError;
 
-      setMessage("Strength workout saved.");
+      setBaseWeights((current) => {
+        const next = { ...current };
+        upserts.forEach((row) => {
+          next[row.lift_name] = row.current_weight;
+        });
+        return next;
+      });
+
+      setMessage(existingLogId ? "Strength workout updated." : "Strength workout saved.");
     } catch (error: unknown) {
       setMessage(
         error instanceof Error ? error.message : "Failed to save strength workout."
@@ -296,11 +440,44 @@ export default function StrengthClient() {
     }
   }
 
+  async function handleDelete() {
+    if (!existingLogId) return;
+
+    const confirmed = window.confirm(
+      `Delete this saved strength log?\n\n${dayConfig.label}`
+    );
+
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setMessage("");
+
+    try {
+      const { error } = await supabase
+        .from("strength_logs")
+        .delete()
+        .eq("id", existingLogId);
+
+      if (error) throw error;
+
+      setExistingLogId(null);
+      resetLiftsToDefaultWeights();
+      setMessage("Strength workout deleted.");
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error ? error.message : "Failed to delete strength workout."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const lifts = [lift1, lift2, lift3].filter(
     (lift): lift is LiftState => Boolean(lift)
   );
 
   const amrapLink = dayConfig.amrapLink ?? null;
+  const controlsDisabled = saving || deleting;
 
   if (loading) {
     return (
@@ -344,7 +521,7 @@ export default function StrengthClient() {
         </section>
 
         <section className="squad-card p-5 sm:p-6">
-          <div className="mb-6 grid gap-3 sm:grid-cols-2">
+          <div className="mb-6 grid gap-3 sm:grid-cols-3">
             <div className="squad-stat-pill">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                 Athlete
@@ -360,6 +537,15 @@ export default function StrengthClient() {
               </p>
               <p className="mt-2 text-base font-semibold text-white">
                 {dayConfig.label}
+              </p>
+            </div>
+
+            <div className="squad-stat-pill">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                Log Status
+              </p>
+              <p className="mt-2 text-base font-semibold text-white">
+                {existingLogId ? "Saved log found" : "No saved log yet"}
               </p>
             </div>
           </div>
@@ -398,8 +584,8 @@ export default function StrengthClient() {
                     lift.set_count === 1
                       ? "md:grid-cols-1"
                       : lift.set_count === 5
-                      ? "md:grid-cols-2 xl:grid-cols-5"
-                      : "md:grid-cols-2"
+                        ? "md:grid-cols-2 xl:grid-cols-5"
+                        : "md:grid-cols-2"
                   }`}
                 >
                   {lift.sets.map((setValue, setIndex) => (
@@ -426,7 +612,7 @@ export default function StrengthClient() {
                         }
                       }}
                       maxReps={5}
-                      disabled={saving || alreadySubmitted}
+                      disabled={controlsDisabled}
                     />
                   ))}
                 </div>
@@ -454,14 +640,32 @@ export default function StrengthClient() {
             ))}
           </div>
 
-          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              onClick={handleSave}
-              disabled={saving || alreadySubmitted}
-              className="squad-button squad-button-primary"
-            >
-              {saving ? "Saving..." : "Save Workout"}
-            </button>
+          <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={handleSave}
+                disabled={controlsDisabled}
+                className="squad-button squad-button-primary"
+              >
+                {saving
+                  ? existingLogId
+                    ? "Updating..."
+                    : "Saving..."
+                  : existingLogId
+                    ? "Update Workout"
+                    : "Save Workout"}
+              </button>
+
+              {existingLogId && (
+                <button
+                  onClick={handleDelete}
+                  disabled={controlsDisabled}
+                  className="squad-button squad-button-secondary"
+                >
+                  {deleting ? "Deleting..." : "Delete Saved Log"}
+                </button>
+              )}
+            </div>
 
             {message && (
               <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
