@@ -150,15 +150,59 @@ function createLiftStateFromStoredLog(
   };
 }
 
-function sortLogsNewestFirst(rows: StrengthLogRow[]) {
-  return [...rows].sort((a, b) => {
-    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+function getWorkoutSortValue(workoutDay: string) {
+  if (workoutDay === "monday") return 1;
+  if (workoutDay === "tuesday") return 2;
+  if (workoutDay === "thursday") return 3;
+  return 0;
+}
 
-    if (bTime !== aTime) return bTime - aTime;
+function getWeekDateValue(weekStartDate: string) {
+  const value = new Date(`${weekStartDate}T00:00:00`).getTime();
+  return Number.isNaN(value) ? 0 : value;
+}
+
+function sortLogsNewest(rows: StrengthLogRow[]) {
+  return [...rows].sort((a, b) => {
+    const weekDiff = getWeekDateValue(b.week_start_date) - getWeekDateValue(a.week_start_date);
+    if (weekDiff !== 0) return weekDiff;
+
+    const dayDiff = getWorkoutSortValue(b.workout_day) - getWorkoutSortValue(a.workout_day);
+    if (dayDiff !== 0) return dayDiff;
+
+    const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (bCreated !== aCreated) return bCreated - aCreated;
 
     return b.id.localeCompare(a.id);
   });
+}
+
+function getStoredLiftNextWeight(storedLift: StoredLiftLog) {
+  if (!storedLift) return null;
+
+  if (typeof storedLift.next_weight === "number") {
+    return storedLift.next_weight;
+  }
+
+  if (typeof storedLift.working_weight === "number") {
+    const rawSets = Array.isArray(storedLift.sets) ? storedLift.sets : [];
+    const setCount =
+      typeof storedLift.set_count === "number" && storedLift.set_count > 0
+        ? storedLift.set_count
+        : rawSets.length;
+
+    const sets = Array.from({ length: setCount }, (_, index) => {
+      const value = rawSets[index];
+      if (typeof value !== "number") return 0;
+      return Math.max(0, Math.min(5, value));
+    });
+
+    const completed = sets.length > 0 && sets.every((rep) => rep >= 5);
+    return calculateNextWeight(completed, storedLift.working_weight);
+  }
+
+  return null;
 }
 
 export default function StrengthClient() {
@@ -259,12 +303,51 @@ export default function StrengthClient() {
     }
   }
 
-  async function removeDuplicateLogs(rows: StrengthLogRow[]) {
-    if (rows.length <= 1) return rows[0] ?? null;
+  async function fetchAllStrengthLogs(currentUserId: string) {
+    const { data, error } = await supabase
+      .from("strength_logs")
+      .select(
+        "id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3"
+      )
+      .eq("user_id", currentUserId);
 
-    const sorted = sortLogsNewestFirst(rows);
-    const keep = sorted[0];
-    const duplicateIds = sorted.slice(1).map((row) => row.id);
+    if (error) throw error;
+    return (data || []) as StrengthLogRow[];
+  }
+
+  async function fetchDayLogs(currentUserId: string) {
+    const { data, error } = await supabase
+      .from("strength_logs")
+      .select(
+        "id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3"
+      )
+      .eq("user_id", currentUserId)
+      .eq("week_start_date", weekStartDate)
+      .eq("workout_day", dayKey);
+
+    if (error) throw error;
+    return (data || []) as StrengthLogRow[];
+  }
+
+  async function pickCanonicalDayLogAndDeleteDuplicates(
+    rows: StrengthLogRow[],
+    preferredId?: string | null
+  ) {
+    if (rows.length === 0) return null;
+
+    let keep: StrengthLogRow | undefined;
+
+    if (preferredId) {
+      keep = rows.find((row) => row.id === preferredId);
+    }
+
+    if (!keep) {
+      keep = sortLogsNewest(rows)[0];
+    }
+
+    const duplicateIds = rows
+      .filter((row) => row.id !== keep!.id)
+      .map((row) => row.id);
 
     if (duplicateIds.length > 0) {
       const { error } = await supabase
@@ -272,15 +355,67 @@ export default function StrengthClient() {
         .delete()
         .in("id", duplicateIds);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
     }
 
     return keep;
   }
 
-  async function loadPage() {
+  async function recomputeLiftSettingsFromLogs(
+    currentUserId: string,
+    fallbackForMissing?: Record<string, number>
+  ) {
+    const allLogs = await fetchAllStrengthLogs(currentUserId);
+    const sorted = sortLogsNewest(allLogs);
+    const latestByLift = new Map<string, number>();
+
+    for (const row of sorted) {
+      const lifts = [row.lift_1, row.lift_2, row.lift_3];
+
+      for (const storedLift of lifts) {
+        const name = storedLift?.name;
+        if (!name || latestByLift.has(name)) continue;
+
+        const nextWeight = getStoredLiftNextWeight(storedLift);
+        if (typeof nextWeight === "number") {
+          latestByLift.set(name, nextWeight);
+        }
+      }
+    }
+
+    if (fallbackForMissing) {
+      Object.entries(fallbackForMissing).forEach(([name, weight]) => {
+        if (!latestByLift.has(name)) {
+          latestByLift.set(name, weight);
+        }
+      });
+    }
+
+    const rowsToUpsert = Array.from(latestByLift.entries()).map(
+      ([lift_name, current_weight]) => ({
+        user_id: currentUserId,
+        lift_name,
+        current_weight,
+      })
+    );
+
+    if (rowsToUpsert.length > 0) {
+      const { error } = await supabase.from("lift_settings").upsert(rowsToUpsert, {
+        onConflict: "user_id,lift_name",
+      });
+
+      if (error) throw error;
+    }
+
+    const nextMap: Record<string, number> = {};
+    rowsToUpsert.forEach((row) => {
+      nextMap[row.lift_name] = row.current_weight;
+    });
+
+    return nextMap;
+  }
+
+  async function loadPage(preferredId?: string | null) {
     setLoading(true);
     setMessage("");
 
@@ -295,30 +430,13 @@ export default function StrengthClient() {
 
     setUserId(user.id);
 
-    const [{ data: profile }, { data: settings }, { data: logRows, error: logError }] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select("profile_name")
-          .eq("id", user.id)
-          .single(),
-        supabase
-          .from("lift_settings")
-          .select("lift_name, current_weight")
-          .eq("user_id", user.id),
-        supabase
-          .from("strength_logs")
-          .select(
-            "id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3"
-          )
-          .eq("user_id", user.id)
-          .eq("week_start_date", weekStartDate)
-          .eq("workout_day", dayKey),
-      ]);
-
-    if (logError) {
-      setMessage(logError.message);
-    }
+    const [{ data: profile }, { data: settings }] = await Promise.all([
+      supabase.from("profiles").select("profile_name").eq("id", user.id).single(),
+      supabase
+        .from("lift_settings")
+        .select("lift_name, current_weight")
+        .eq("user_id", user.id),
+    ]);
 
     setProfileName(profile?.profile_name || "");
 
@@ -329,8 +447,11 @@ export default function StrengthClient() {
 
     setBaseWeights(settingsMap);
 
-    const rows = (logRows || []) as StrengthLogRow[];
-    const canonicalLog = await removeDuplicateLogs(rows);
+    const dayRows = await fetchDayLogs(user.id);
+    const canonicalLog = await pickCanonicalDayLogAndDeleteDuplicates(
+      dayRows,
+      preferredId
+    );
 
     hydrateFromLog(canonicalLog, settingsMap);
 
@@ -342,8 +463,9 @@ export default function StrengthClient() {
   }
 
   useEffect(() => {
-    loadPage();
-  }, [dayKey, weekStartDate, router]);
+    loadPage(existingLogId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey, weekStartDate]);
 
   function updateSet(
     lift: LiftState | null,
@@ -367,14 +489,15 @@ export default function StrengthClient() {
     });
   }
 
-  function resetLiftsToDefaultWeights() {
+  function resetLiftsToDefaultWeights(nextWeights?: Record<string, number>) {
+    const weights = nextWeights || baseWeights;
     const first = workoutDefinition[0];
     const second = workoutDefinition[1];
     const third = workoutDefinition[2];
 
     setLift1(
       first
-        ? createLiftState(first.name, first.setCount, baseWeights[first.name] || 0)
+        ? createLiftState(first.name, first.setCount, weights[first.name] || 0)
         : null
     );
     setLift2(
@@ -382,13 +505,13 @@ export default function StrengthClient() {
         ? createLiftState(
             second.name,
             second.setCount,
-            baseWeights[second.name] || 0
+            weights[second.name] || 0
           )
         : null
     );
     setLift3(
       third
-        ? createLiftState(third.name, third.setCount, baseWeights[third.name] || 0)
+        ? createLiftState(third.name, third.setCount, weights[third.name] || 0)
         : null
     );
   }
@@ -413,63 +536,47 @@ export default function StrengthClient() {
         lift_3: lift3,
       };
 
+      let savedId = existingLogId;
+
       if (existingLogId) {
-        const { error: updateError } = await supabase
+        const { error } = await supabase
           .from("strength_logs")
           .update(strengthPayload)
           .eq("id", existingLogId);
 
-        if (updateError) throw updateError;
+        if (error) throw error;
       } else {
-        const { data: insertedRows, error: insertError } = await supabase
+        const { data, error } = await supabase
           .from("strength_logs")
           .insert(strengthPayload)
           .select("id");
 
-        if (insertError) throw insertError;
-
-        setExistingLogId(insertedRows?.[0]?.id || null);
+        if (error) throw error;
+        savedId = data?.[0]?.id || null;
+        setExistingLogId(savedId);
       }
 
-      const upserts = [lift1, lift2, lift3]
-        .filter((lift): lift is LiftState => Boolean(lift))
-        .map((lift) => ({
-          user_id: userId,
-          lift_name: lift.name,
-          current_weight: lift.next_weight,
-        }));
-
-      const { error: settingsError } = await supabase
-        .from("lift_settings")
-        .upsert(upserts, {
-          onConflict: "user_id,lift_name",
-        });
-
-      if (settingsError) throw settingsError;
-
-      const nextSettingsMap = { ...baseWeights };
-      upserts.forEach((row) => {
-        nextSettingsMap[row.lift_name] = row.current_weight;
-      });
-      setBaseWeights(nextSettingsMap);
-
-      const { data: refreshedRows, error: refreshError } = await supabase
-        .from("strength_logs")
-        .select(
-          "id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3"
-        )
-        .eq("user_id", userId)
-        .eq("week_start_date", weekStartDate)
-        .eq("workout_day", dayKey);
-
-      if (refreshError) throw refreshError;
-
-      const canonicalLog = await removeDuplicateLogs(
-        (refreshedRows || []) as StrengthLogRow[]
+      const refreshedDayRows = await fetchDayLogs(userId);
+      const canonicalLog = await pickCanonicalDayLogAndDeleteDuplicates(
+        refreshedDayRows,
+        savedId
       );
 
-      hydrateFromLog(canonicalLog, nextSettingsMap);
+      const fallbackForMissing: Record<string, number> = {};
+      [lift1, lift2, lift3]
+        .filter((lift): lift is LiftState => Boolean(lift))
+        .forEach((lift) => {
+          fallbackForMissing[lift.name] = lift.working_weight;
+        });
 
+      const nextSettingsMap = await recomputeLiftSettingsFromLogs(
+        userId,
+        fallbackForMissing
+      );
+
+      setBaseWeights(nextSettingsMap);
+      hydrateFromLog(canonicalLog, nextSettingsMap);
+      setExistingLogId(canonicalLog?.id || null);
       setMessage(existingLogId ? "Strength workout updated." : "Strength workout saved.");
     } catch (error: unknown) {
       setMessage(
@@ -493,6 +600,13 @@ export default function StrengthClient() {
     setMessage("");
 
     try {
+      const deletedLiftFallbacks: Record<string, number> = {};
+      [lift1, lift2, lift3]
+        .filter((lift): lift is LiftState => Boolean(lift))
+        .forEach((lift) => {
+          deletedLiftFallbacks[lift.name] = lift.working_weight;
+        });
+
       const { error } = await supabase
         .from("strength_logs")
         .delete()
@@ -500,8 +614,14 @@ export default function StrengthClient() {
 
       if (error) throw error;
 
+      const nextSettingsMap = await recomputeLiftSettingsFromLogs(
+        userId,
+        deletedLiftFallbacks
+      );
+
+      setBaseWeights(nextSettingsMap);
       setExistingLogId(null);
-      resetLiftsToDefaultWeights();
+      resetLiftsToDefaultWeights(nextSettingsMap);
       setMessage("Strength workout deleted.");
     } catch (error: unknown) {
       setMessage(
