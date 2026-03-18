@@ -183,70 +183,37 @@ export default function StatsPage() {
         <AppNav />
 
         <section className="squad-card overflow-hidden p-5 sm:p-7">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <p className="squad-label">Performance</p>
-              <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-                Stats
-              </h1>
-              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                Your training dashboard for streaks, lift progression, and latest
-                conditioning scores.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Total
-                </p>
-                <p className="mt-2 text-2xl font-bold">{totalSessions}</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Strength
-                </p>
-                <p className="mt-2 text-2xl font-bold">{totalStrengthSessions}</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4 col-span-2 sm:col-span-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Conditioning
-                </p>
-                <p className="mt-2 text-2xl font-bold">
-                  {totalConditioningSessions}
-                </p>
-              </div>
-            </div>
+          <div className="max-w-2xl">
+            <p className="squad-label">Performance</p>
+            <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+              Stats
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+              Your training dashboard for streaks, lift progression, and latest
+              conditioning scores.
+            </p>
           </div>
         </section>
 
         <section className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
           <div className="squad-card p-5 sm:p-6">
-            <p className="squad-label">Current Streak</p>
+            <p className="squad-label">Streak</p>
             <div className="mt-4 flex items-end justify-between gap-4">
               <div>
                 <p className="text-5xl font-bold tracking-tight sm:text-6xl">
                   {streak}
                 </p>
                 <p className="mt-2 text-base text-slate-300">
-                  {streak === 1 ? "week in a row" : "weeks in a row"}
+                  {streak === 1 ? "day" : "days"}
                 </p>
               </div>
 
               <div className="rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-right">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
-                  Momentum
+                  Rule
                 </p>
-                <p className="mt-2 text-lg font-bold text-white">
-                  {streak === 0
-                    ? "Build it"
-                    : streak < 4
-                    ? "Good"
-                    : streak < 8
-                    ? "Strong"
-                    : "Elite"}
+                <p className="mt-2 text-sm font-semibold text-white">
+                  Week counts only after all 5 days are complete
                 </p>
               </div>
             </div>

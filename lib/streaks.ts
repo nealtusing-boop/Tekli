@@ -12,40 +12,40 @@ type ConditioningLogForStreak = {
   event_name: string;
 };
 
-function getCompletedWeekSet(
+type WeekStatus = {
+  mondayRun: boolean;
+  tuesdayStrength: boolean;
+  amrap1: boolean;
+  murph: boolean;
+  thursdayStrength: boolean;
+  amrap2: boolean;
+  ruck: boolean;
+};
+
+function buildWeekMap(
   strengthLogs: StrengthLogForStreak[],
   conditioningLogs: ConditioningLogForStreak[],
   userId: string
 ) {
-  const weekMap: Record<
-    string,
-    {
-      tuesdayStrength: boolean;
-      thursdayStrength: boolean;
-      mondayRun: boolean;
-      murph: boolean;
-      ruck: boolean;
-      amrap1: boolean;
-      amrap2: boolean;
-    }
-  > = {};
+  const weekMap: Record<string, WeekStatus> = {};
 
-  const ensureWeek = (week: string) => {
-    if (!weekMap[week]) {
-      weekMap[week] = {
-        tuesdayStrength: false,
-        thursdayStrength: false,
+  function ensureWeek(weekStartDate: string) {
+    if (!weekMap[weekStartDate]) {
+      weekMap[weekStartDate] = {
         mondayRun: false,
-        murph: false,
-        ruck: false,
+        tuesdayStrength: false,
         amrap1: false,
+        murph: false,
+        thursdayStrength: false,
         amrap2: false,
+        ruck: false,
       };
     }
-  };
+  }
 
   for (const log of strengthLogs) {
     if (log.user_id !== userId) continue;
+
     ensureWeek(log.week_start_date);
 
     if (log.workout_day === "tuesday") {
@@ -59,74 +59,82 @@ function getCompletedWeekSet(
 
   for (const log of conditioningLogs) {
     if (log.user_id !== userId) continue;
+
     ensureWeek(log.week_start_date);
 
     if (log.event_name === "5_mile_run") {
       weekMap[log.week_start_date].mondayRun = true;
     }
 
-    if (log.event_name === "murph") {
-      weekMap[log.week_start_date].murph = true;
-    }
-
-    if (log.event_name === "ruck") {
-      weekMap[log.week_start_date].ruck = true;
-    }
-
     if (log.event_name === "amrap_1") {
       weekMap[log.week_start_date].amrap1 = true;
+    }
+
+    if (log.event_name === "murph") {
+      weekMap[log.week_start_date].murph = true;
     }
 
     if (log.event_name === "amrap_2") {
       weekMap[log.week_start_date].amrap2 = true;
     }
-  }
 
-  const completedWeeks = new Set<string>();
-
-  for (const weekStartDate of Object.keys(weekMap)) {
-    const week = weekMap[weekStartDate];
-
-    const isComplete =
-      week.mondayRun &&
-      week.tuesdayStrength &&
-      week.amrap1 &&
-      week.murph &&
-      week.thursdayStrength &&
-      week.amrap2 &&
-      week.ruck;
-
-    if (isComplete) {
-      completedWeeks.add(weekStartDate);
+    if (log.event_name === "ruck") {
+      weekMap[log.week_start_date].ruck = true;
     }
   }
 
-  return completedWeeks;
+  return weekMap;
 }
 
+function isWeekComplete(week: WeekStatus) {
+  const mondayComplete = week.mondayRun;
+  const tuesdayComplete = week.tuesdayStrength && week.amrap1;
+  const wednesdayComplete = week.murph;
+  const thursdayComplete = week.thursdayStrength && week.amrap2;
+  const fridayComplete = week.ruck;
+
+  return (
+    mondayComplete &&
+    tuesdayComplete &&
+    wednesdayComplete &&
+    thursdayComplete &&
+    fridayComplete
+  );
+}
+
+/**
+ * Returns streak in DAYS.
+ *
+ * Important:
+ * - A full week only counts if all 5 scheduled training days are logged.
+ * - Tuesday only counts if Tuesday Strength + AMRAP #1 are both logged.
+ * - Thursday only counts if Thursday Strength + AMRAP #2 are both logged.
+ * - Each completed week adds 5 days to the streak.
+ */
 export function calculateCurrentStreak(
   strengthLogs: StrengthLogForStreak[],
   conditioningLogs: ConditioningLogForStreak[],
   userId: string
 ) {
-  const completedWeeks = getCompletedWeekSet(
-    strengthLogs,
-    conditioningLogs,
-    userId
-  );
-
+  const weekMap = buildWeekMap(strengthLogs, conditioningLogs, userId);
   const currentWeek = getWeekStartDate();
 
-  let cursor = completedWeeks.has(currentWeek)
-    ? currentWeek
-    : subtractOneWeek(currentWeek);
+  let cursor = currentWeek;
+  let completedWeeks = 0;
 
-  let streak = 0;
-
-  while (completedWeeks.has(cursor)) {
-    streak += 1;
+  while (weekMap[cursor] && isWeekComplete(weekMap[cursor])) {
+    completedWeeks += 1;
     cursor = subtractOneWeek(cursor);
   }
 
-  return streak;
+  if (completedWeeks === 0) {
+    let previousWeek = subtractOneWeek(currentWeek);
+
+    while (weekMap[previousWeek] && isWeekComplete(weekMap[previousWeek])) {
+      completedWeeks += 1;
+      previousWeek = subtractOneWeek(previousWeek);
+    }
+  }
+
+  return completedWeeks * 5;
 }

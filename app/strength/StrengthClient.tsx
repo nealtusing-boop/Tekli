@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppNav from "../../components/AppNav";
@@ -31,6 +32,14 @@ export default function StrengthPage() {
 
   const title =
     strengthDay === "tuesday" ? "Tuesday Strength" : "Thursday Strength";
+
+  const nextAmrapHref =
+    strengthDay === "tuesday"
+      ? "/conditioning?event=amrap_1"
+      : "/conditioning?event=amrap_2";
+
+  const nextAmrapLabel =
+    strengthDay === "tuesday" ? "Go to AMRAP #1" : "Go to AMRAP #2";
 
   const weekStartDate = useMemo(() => getWeekStartDate(), []);
 
@@ -167,7 +176,7 @@ export default function StrengthPage() {
         throw settingsError;
       }
 
-      setMessage("Strength workout saved.");
+      setMessage("Strength workout saved. Continue straight to your AMRAP.");
     } catch (error: any) {
       setMessage(error?.message || "Failed to save strength workout.");
     } finally {
@@ -177,71 +186,105 @@ export default function StrengthPage() {
 
   if (loading) {
     return (
-      <main className="p-6">
-        <div className="mx-auto max-w-6xl">Loading...</div>
+      <main className="squad-shell py-6">
+        <div className="squad-card p-6">Loading...</div>
       </main>
     );
   }
 
   return (
-    <main className="p-6">
-      <div className="mx-auto max-w-6xl">
+    <main className="squad-shell py-4 sm:py-6">
+      <div className="squad-page-stack">
         <AppNav />
 
-        <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h1 className="text-3xl font-bold">{title}</h1>
-          <p className="mt-2 text-slate-300">
-            Complete your sets. Reps are limited from 0 to 5.
-          </p>
-        </div>
+        <section className="squad-card overflow-hidden p-5 sm:p-7">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="squad-label">Strength Session</p>
+              <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+                {title}
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+                Log each set from 0 to 5 reps. Tuesday and Thursday only count as
+                complete training days once the matching AMRAP is also logged.
+              </p>
+            </div>
 
-        <div className="grid gap-6">
+            <div className="flex flex-wrap gap-3">
+              <Link href={nextAmrapHref} className="squad-button squad-button-secondary">
+                {nextAmrapLabel}
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-6">
           {lifts.map((lift, liftIndex) => (
-            <div
-              key={lift.name}
-              className="rounded-2xl border border-slate-800 bg-slate-900 p-6"
-            >
-              <h2 className="text-2xl font-bold">{lift.name}</h2>
-              <p className="mt-2 text-slate-300">
-                Current Working Weight:{" "}
-                <span className="font-bold text-white">{lift.workingWeight} lb</span>
-              </p>
-              <p className="mt-1 text-sm text-slate-400">
-                {lift.setCount === 1 ? "This lift is 1x5." : "This lift is 5x5."}
-              </p>
+            <div key={lift.name} className="squad-card p-5 sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="squad-label">Lift</p>
+                  <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
+                    {lift.name}
+                  </h2>
+                  <p className="mt-3 text-slate-300">
+                    Current Working Weight:{" "}
+                    <span className="font-bold text-white">
+                      {lift.workingWeight} lb
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {lift.setCount === 1 ? "This lift is 1x5." : "This lift is 5x5."}
+                  </p>
+                </div>
 
-              <div className="mt-6 grid gap-3 md:grid-cols-5">
-                {[0, 1, 2, 3, 4].map((setIndex) => {
-                  const disabled = setIndex >= lift.setCount;
+                <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                    Sets
+                  </p>
+                  <p className="mt-2 text-2xl font-bold">{lift.setCount}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {Array.from({ length: lift.setCount }).map((_, setIndex) => {
+                  const disabled =
+                    saving || message.includes("already submitted");
+
+                  const isComplete = lift.sets[setIndex] === 5;
 
                   return (
                     <div
                       key={setIndex}
-                      className={`rounded-xl border p-4 ${
-                        disabled
-                          ? "border-slate-800 bg-slate-950 opacity-50"
-                          : "border-slate-700 bg-slate-950"
+                      className={`rounded-3xl border p-4 transition ${
+                        isComplete
+                          ? "border-blue-400/30 bg-blue-500/10"
+                          : "border-white/8 bg-white/4"
                       }`}
                     >
-                      <p className="mb-3 font-semibold">Set {setIndex + 1}</p>
+                      <p className="mb-4 text-sm font-semibold uppercase tracking-[0.16em] text-slate-300">
+                        Set {setIndex + 1}
+                      </p>
 
                       <div className="flex items-center justify-between gap-2">
                         <button
                           type="button"
                           disabled={disabled}
                           onClick={() => updateSet(liftIndex, setIndex, -1)}
-                          className="rounded-lg bg-slate-800 px-3 py-2 text-lg font-bold disabled:opacity-40"
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/8 bg-white/6 text-xl font-bold text-white transition hover:bg-white/10 disabled:opacity-40"
                         >
-                          -
+                          −
                         </button>
 
-                        <span className="text-2xl font-bold">{lift.sets[setIndex]}</span>
+                        <span className="min-w-[44px] text-center text-3xl font-bold">
+                          {lift.sets[setIndex]}
+                        </span>
 
                         <button
                           type="button"
                           disabled={disabled}
                           onClick={() => updateSet(liftIndex, setIndex, 1)}
-                          className="rounded-lg bg-slate-800 px-3 py-2 text-lg font-bold disabled:opacity-40"
+                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/8 bg-white/6 text-xl font-bold text-white transition hover:bg-white/10 disabled:opacity-40"
                         >
                           +
                         </button>
@@ -252,19 +295,29 @@ export default function StrengthPage() {
               </div>
             </div>
           ))}
-        </div>
+        </section>
 
-        <div className="mt-6">
-          <button
-            onClick={handleSave}
-            disabled={saving || message.includes("already submitted")}
-            className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save Strength Workout"}
-          </button>
-        </div>
+        <section className="squad-card p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+            <button
+              onClick={handleSave}
+              disabled={saving || message.includes("already submitted")}
+              className="squad-button squad-button-primary"
+            >
+              {saving ? "Saving..." : "Save Strength Workout"}
+            </button>
 
-        {message && <p className="mt-4 text-slate-300">{message}</p>}
+            <Link href={nextAmrapHref} className="squad-button squad-button-secondary">
+              {nextAmrapLabel}
+            </Link>
+          </div>
+
+          {message && (
+            <div className="mt-4 rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
+              {message}
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );

@@ -260,40 +260,15 @@ export default function LeaderboardPage() {
         <AppNav />
 
         <section className="squad-card overflow-hidden p-5 sm:p-7">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <p className="squad-label">Squad Results</p>
-              <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-                Leaderboard
-              </h1>
-              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                Compare the squad’s best times, top AMRAPs, and longest active
-                streaks.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4 text-center">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  Timed
-                </p>
-                <p className="mt-2 text-2xl font-bold">3</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4 text-center">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  AMRAP
-                </p>
-                <p className="mt-2 text-2xl font-bold">2</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4 text-center">
-                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
-                  Streak
-                </p>
-                <p className="mt-2 text-2xl font-bold">1</p>
-              </div>
-            </div>
+          <div className="max-w-2xl">
+            <p className="squad-label">Squad Results</p>
+            <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+              Leaderboard
+            </h1>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+              Compare the squad’s best times, top AMRAPs, and longest active
+              streaks.
+            </p>
           </div>
         </section>
 
@@ -335,9 +310,9 @@ export default function LeaderboardPage() {
 
           <LeaderboardSection
             title="Longest Streak"
-            subtitle="Most consecutive completed weeks."
+            subtitle="Most consecutive completed training days. Tuesday and Thursday only count when both workouts are logged."
             rows={streakLeaders}
-            formatter={(value) => `${value} weeks`}
+            formatter={(value) => `${value} days`}
           />
         </div>
       </div>
