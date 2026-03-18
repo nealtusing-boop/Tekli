@@ -1,5 +1,6 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
+import SplashScreen from "../components/SplashScreen";
 
 export const metadata: Metadata = {
   title: "Squad PT",
@@ -37,7 +38,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <SplashScreen />
+        {children}
+      </body>
     </html>
   );
 }
