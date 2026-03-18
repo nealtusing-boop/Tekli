@@ -164,10 +164,12 @@ function getWeekDateValue(weekStartDate: string) {
 
 function sortLogsNewest(rows: StrengthLogRow[]) {
   return [...rows].sort((a, b) => {
-    const weekDiff = getWeekDateValue(b.week_start_date) - getWeekDateValue(a.week_start_date);
+    const weekDiff =
+      getWeekDateValue(b.week_start_date) - getWeekDateValue(a.week_start_date);
     if (weekDiff !== 0) return weekDiff;
 
-    const dayDiff = getWorkoutSortValue(b.workout_day) - getWorkoutSortValue(a.workout_day);
+    const dayDiff =
+      getWorkoutSortValue(b.workout_day) - getWorkoutSortValue(a.workout_day);
     if (dayDiff !== 0) return dayDiff;
 
     const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -301,6 +303,16 @@ export default function StrengthClient() {
           : null
       );
     }
+  }
+
+  function hydrateFromLocalLifts(
+    localLift1: LiftState | null,
+    localLift2: LiftState | null,
+    localLift3: LiftState | null
+  ) {
+    setLift1(localLift1 ? { ...localLift1, sets: [...localLift1.sets] } : null);
+    setLift2(localLift2 ? { ...localLift2, sets: [...localLift2.sets] } : null);
+    setLift3(localLift3 ? { ...localLift3, sets: [...localLift3.sets] } : null);
   }
 
   async function fetchAllStrengthLogs(currentUserId: string) {
@@ -525,15 +537,19 @@ export default function StrengthClient() {
     setSaving(true);
     setMessage("");
 
+    const localLift1 = lift1 ? { ...lift1, sets: [...lift1.sets] } : null;
+    const localLift2 = lift2 ? { ...lift2, sets: [...lift2.sets] } : null;
+    const localLift3 = lift3 ? { ...lift3, sets: [...lift3.sets] } : null;
+
     try {
       const strengthPayload = {
         user_id: userId,
         profile_name: profileName,
         week_start_date: weekStartDate,
         workout_day: dayKey,
-        lift_1: lift1,
-        lift_2: lift2,
-        lift_3: lift3,
+        lift_1: localLift1,
+        lift_2: localLift2,
+        lift_3: localLift3,
       };
 
       let savedId = existingLogId;
@@ -553,7 +569,6 @@ export default function StrengthClient() {
 
         if (error) throw error;
         savedId = data?.[0]?.id || null;
-        setExistingLogId(savedId);
       }
 
       const refreshedDayRows = await fetchDayLogs(userId);
@@ -563,7 +578,7 @@ export default function StrengthClient() {
       );
 
       const fallbackForMissing: Record<string, number> = {};
-      [lift1, lift2, lift3]
+      [localLift1, localLift2, localLift3]
         .filter((lift): lift is LiftState => Boolean(lift))
         .forEach((lift) => {
           fallbackForMissing[lift.name] = lift.working_weight;
@@ -575,8 +590,10 @@ export default function StrengthClient() {
       );
 
       setBaseWeights(nextSettingsMap);
-      hydrateFromLog(canonicalLog, nextSettingsMap);
-      setExistingLogId(canonicalLog?.id || null);
+      setExistingLogId(savedId || canonicalLog?.id || null);
+
+      hydrateFromLocalLifts(localLift1, localLift2, localLift3);
+
       setMessage(existingLogId ? "Strength workout updated." : "Strength workout saved.");
     } catch (error: unknown) {
       setMessage(
