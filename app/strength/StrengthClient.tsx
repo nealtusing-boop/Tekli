@@ -150,16 +150,15 @@ function createLiftStateFromStoredLog(
   };
 }
 
-function pickNewestLog(rows: StrengthLogRow[] | null | undefined) {
-  if (!rows || rows.length === 0) return null;
-
-  const sorted = [...rows].sort((a, b) => {
+function sortLogsNewestFirst(rows: StrengthLogRow[]) {
+  return [...rows].sort((a, b) => {
     const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
     const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return bTime - aTime;
-  });
 
-  return sorted[0];
+    if (bTime !== aTime) return bTime - aTime;
+
+    return b.id.localeCompare(a.id);
+  });
 }
 
 export default function StrengthClient() {
@@ -260,6 +259,27 @@ export default function StrengthClient() {
     }
   }
 
+  async function removeDuplicateLogs(rows: StrengthLogRow[]) {
+    if (rows.length <= 1) return rows[0] ?? null;
+
+    const sorted = sortLogsNewestFirst(rows);
+    const keep = sorted[0];
+    const duplicateIds = sorted.slice(1).map((row) => row.id);
+
+    if (duplicateIds.length > 0) {
+      const { error } = await supabase
+        .from("strength_logs")
+        .delete()
+        .in("id", duplicateIds);
+
+      if (error) {
+        throw error;
+      }
+    }
+
+    return keep;
+  }
+
   async function loadPage() {
     setLoading(true);
     setMessage("");
@@ -277,7 +297,11 @@ export default function StrengthClient() {
 
     const [{ data: profile }, { data: settings }, { data: logRows, error: logError }] =
       await Promise.all([
-        supabase.from("profiles").select("profile_name").eq("id", user.id).single(),
+        supabase
+          .from("profiles")
+          .select("profile_name")
+          .eq("id", user.id)
+          .single(),
         supabase
           .from("lift_settings")
           .select("lift_name, current_weight")
@@ -302,12 +326,15 @@ export default function StrengthClient() {
     (settings || []).forEach((row: LiftSettingRow) => {
       settingsMap[row.lift_name] = row.current_weight || 0;
     });
+
     setBaseWeights(settingsMap);
 
-    const newestLog = pickNewestLog((logRows || []) as StrengthLogRow[]);
-    hydrateFromLog(newestLog, settingsMap);
+    const rows = (logRows || []) as StrengthLogRow[];
+    const canonicalLog = await removeDuplicateLogs(rows);
 
-    if (newestLog) {
+    hydrateFromLog(canonicalLog, settingsMap);
+
+    if (canonicalLog) {
       setMessage("Existing log loaded. You can update or delete it.");
     }
 
@@ -316,7 +343,7 @@ export default function StrengthClient() {
 
   useEffect(() => {
     loadPage();
-  }, [dayKey, router, weekStartDate]);
+  }, [dayKey, weekStartDate, router]);
 
   function updateSet(
     lift: LiftState | null,
@@ -420,30 +447,28 @@ export default function StrengthClient() {
 
       if (settingsError) throw settingsError;
 
-      setBaseWeights((current) => {
-        const next = { ...current };
-        upserts.forEach((row) => {
-          next[row.lift_name] = row.current_weight;
-        });
-        return next;
+      const nextSettingsMap = { ...baseWeights };
+      upserts.forEach((row) => {
+        nextSettingsMap[row.lift_name] = row.current_weight;
       });
+      setBaseWeights(nextSettingsMap);
 
       const { data: refreshedRows, error: refreshError } = await supabase
         .from("strength_logs")
-        .select("id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3")
+        .select(
+          "id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3"
+        )
         .eq("user_id", userId)
         .eq("week_start_date", weekStartDate)
         .eq("workout_day", dayKey);
 
       if (refreshError) throw refreshError;
 
-      const newestLog = pickNewestLog((refreshedRows || []) as StrengthLogRow[]);
-      const nextSettingsMap = {
-        ...baseWeights,
-        ...Object.fromEntries(upserts.map((row) => [row.lift_name, row.current_weight])),
-      };
+      const canonicalLog = await removeDuplicateLogs(
+        (refreshedRows || []) as StrengthLogRow[]
+      );
 
-      hydrateFromLog(newestLog, nextSettingsMap);
+      hydrateFromLog(canonicalLog, nextSettingsMap);
 
       setMessage(existingLogId ? "Strength workout updated." : "Strength workout saved.");
     } catch (error: unknown) {
