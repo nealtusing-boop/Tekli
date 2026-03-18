@@ -68,7 +68,6 @@ export default function AppNav() {
 
   return (
     <>
-      {/* Desktop Nav */}
       <nav className="squad-top-nav hidden md:block">
         <div className="squad-card squad-glow overflow-hidden px-4 py-4 lg:px-5">
           <div className="flex items-center justify-between gap-4">
@@ -104,18 +103,17 @@ export default function AppNav() {
         </div>
       </nav>
 
-      {/* Mobile Nav */}
       <nav className="md:hidden">
-        {/* Top-right logout button */}
-        <div className="fixed top-4 right-4 z-40">
-          <div className="rounded-xl border border-white/10 bg-[rgba(7,15,28,0.85)] px-2 py-1 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-            <div className="scale-90">
-              <LogoutButton />
+        {pathname === "/" && (
+          <div className="fixed top-4 right-4 z-40">
+            <div className="rounded-xl border border-white/10 bg-[rgba(7,15,28,0.85)] px-2 py-1 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+              <div className="scale-90">
+                <LogoutButton />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Bottom nav dock */}
         <div className="squad-mobile-dock">
           <div className="rounded-[28px] border border-white/10 bg-[rgba(7,15,28,0.92)] px-2 py-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
             <div
