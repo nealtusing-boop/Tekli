@@ -91,8 +91,8 @@ export default function AppNav() {
                   href={link.href}
                   className={`shrink-0 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                     isActive
-                      ? "bg-white text-slate-950 shadow-[0_14px_36px_rgba(255,255,255,0.10)]"
-                      : "border border-white/8 bg-white/5 text-white hover:bg-white/9"
+                      ? "bg-white text-slate-950 ring-1 ring-white/90 shadow-[0_14px_36px_rgba(255,255,255,0.14)]"
+                      : "border border-white/8 bg-white/5 text-slate-100 hover:bg-white/9"
                   }`}
                 >
                   {link.label}
@@ -124,8 +124,8 @@ export default function AppNav() {
                   href={link.href}
                   className={`shrink-0 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
                     isActive
-                      ? "bg-white text-slate-950 shadow-[0_14px_36px_rgba(255,255,255,0.10)]"
-                      : "border border-white/8 bg-white/5 text-white hover:bg-white/9"
+                      ? "bg-white text-slate-950 ring-1 ring-white/90 shadow-[0_14px_36px_rgba(255,255,255,0.14)]"
+                      : "border border-white/8 bg-white/5 text-slate-100 hover:bg-white/9"
                   }`}
                 >
                   {link.label}
@@ -151,7 +151,7 @@ export default function AppNav() {
                     href={link.href}
                     className={`flex min-h-[58px] items-center justify-center rounded-[20px] px-2 text-center text-[11px] font-semibold leading-tight transition ${
                       isActive
-                        ? "bg-white text-slate-950 shadow-[0_10px_24px_rgba(255,255,255,0.10)]"
+                        ? "bg-white text-slate-950 ring-1 ring-white/90 shadow-[0_10px_24px_rgba(255,255,255,0.14)]"
                         : "text-slate-300 hover:bg-white/6 hover:text-white"
                     }`}
                   >
