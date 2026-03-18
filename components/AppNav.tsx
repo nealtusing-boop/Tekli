@@ -60,8 +60,8 @@ export default function AppNav() {
     return [
       { href: "/", label: "Today" },
       { href: "/stats", label: "Stats" },
-      { href: "/leaderboard", label: "Leaderboard" },
       { href: "/history", label: "History" },
+      { href: "/leaderboard", label: "Leaderboard" },
       ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : []),
     ];
   }, [isAdmin]);
