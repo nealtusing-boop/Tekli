@@ -33,8 +33,8 @@ const WEEK_PLANS: DayPlan[] = [
       "Barbell Row 5x5",
       "",
       "15 Minute AMRAP",
-      "20 KB Swings",
-      "10 DB Thrusters",
+      "20 KB Swings @ 53/35",
+      "15 Thrusters @ 40/20",
       "10 Toes to Bar",
     ],
     actions: [
@@ -68,9 +68,9 @@ const WEEK_PLANS: DayPlan[] = [
       "Deadlift 1x5",
       "",
       "15 Minute AMRAP",
-      "20 Alternating DB Snatches",
+      "20 Alt DB Snatches @ 40/20",
+      "15 Russian Twists @ 45/25",
       "10 Burpee Box Jump Overs",
-      "10 Russian Twists w/ plate",
     ],
     actions: [
       { label: "Log Strength", href: "/strength?day=thursday" },

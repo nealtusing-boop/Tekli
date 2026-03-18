@@ -7,6 +7,63 @@ import { supabase } from "../../lib/supabase";
 import { CONDITIONING_EVENTS, ConditioningEventKey } from "../../lib/schedule";
 import { getWeekStartDate } from "../../lib/date";
 
+function Stepper({
+  label,
+  value,
+  onDecrease,
+  onIncrease,
+  minLabel,
+  maxLabel,
+  disabled = false,
+}: {
+  label: string;
+  value: number;
+  onDecrease: () => void;
+  onIncrease: () => void;
+  minLabel?: string;
+  maxLabel?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="rounded-3xl border border-white/8 bg-white/4 p-4 sm:p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <label className="text-sm font-semibold text-slate-100">{label}</label>
+        {(minLabel || maxLabel) && (
+          <span className="text-xs text-slate-400">
+            {minLabel || ""}
+            {minLabel && maxLabel ? " • " : ""}
+            {maxLabel || ""}
+          </span>
+        )}
+      </div>
+
+      <div className="squad-stepper">
+        <button
+          type="button"
+          onClick={onDecrease}
+          disabled={disabled}
+          className="squad-stepper-button"
+        >
+          −
+        </button>
+
+        <div className="squad-stepper-value">
+          <p className="text-3xl font-bold tracking-tight sm:text-4xl">{value}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onIncrease}
+          disabled={disabled}
+          className="squad-stepper-button"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ConditioningClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -30,6 +87,86 @@ export default function ConditioningClient() {
 
   const eventConfig = CONDITIONING_EVENTS[eventKey];
   const weekStartDate = useMemo(() => getWeekStartDate(), []);
+
+  const alreadySubmitted = message.includes("already submitted");
+  const isTimeWorkout = eventConfig.type === "time";
+  const totalSeconds = minutes * 60 + seconds;
+  const totalAmrapReps = rounds * 45 + extraReps;
+
+  const eventMeta = useMemo(() => {
+    switch (eventKey) {
+      case "5_mile_run":
+        return {
+          badge: "Distance",
+          badgeValue: "5 miles",
+          accent: "from-cyan-400/20 to-blue-500/15",
+          helper: "Enter your finishing time.",
+        };
+      case "murph":
+        return {
+          badge: "Benchmark",
+          badgeValue: "Murph",
+          accent: "from-blue-400/20 to-indigo-500/15",
+          helper: "Enter your finishing time.",
+        };
+      case "ruck":
+        return {
+          badge: "Load",
+          badgeValue: "40 lb",
+          accent: "from-emerald-400/20 to-blue-500/15",
+          helper: "Enter your finishing time.",
+        };
+      case "amrap_1":
+        return {
+          badge: "Window",
+          badgeValue: "15 min",
+          accent: "from-blue-400/20 to-cyan-500/15",
+          helper: "Log rounds, extra reps, and whether it was prescribed.",
+        };
+      case "amrap_2":
+        return {
+          badge: "Window",
+          badgeValue: "15 min",
+          accent: "from-indigo-400/20 to-blue-500/15",
+          helper: "Log rounds, extra reps, and whether it was prescribed.",
+        };
+      default:
+        return {
+          badge: "Workout",
+          badgeValue: "Session",
+          accent: "from-blue-400/20 to-cyan-500/15",
+          helper: "",
+        };
+    }
+  }, [eventKey]);
+
+  const amrapDetails = useMemo(() => {
+    if (eventKey === "amrap_1") {
+      return {
+        title: "Workout",
+        subtitle: "AMRAP #1",
+        movements: [
+          "20 KB Swings @ 53/35",
+          "15 Thrusters @ 40/20",
+          "10 Toes to Bar",
+        ],
+      };
+    }
+
+    if (eventKey === "amrap_2") {
+      return {
+        title: "Workout",
+        subtitle: "AMRAP #2",
+        movements: [
+          "20 Alt DB Snatches @ 40/20",
+          "15 Russian Twists @ 45/25",
+          "10 Burpee Box Jump Overs",
+        ],
+      };
+    }
+
+    return null;
+  }, [eventKey]);
 
   useEffect(() => {
     async function loadPage() {
@@ -73,9 +210,18 @@ export default function ConditioningClient() {
     loadPage();
   }, [eventKey, router, weekStartDate]);
 
-  function parseNumberInput(value: string) {
-    if (value === "") return 0;
-    return Number(value);
+  function adjustValue(
+    current: number,
+    delta: number,
+    min: number,
+    max?: number
+  ) {
+    const next = current + delta;
+
+    if (next < min) return min;
+    if (typeof max === "number" && next > max) return max;
+
+    return next;
   }
 
   async function handleSave() {
@@ -93,7 +239,7 @@ export default function ConditioningClient() {
           throw new Error("Seconds must be between 0 and 59.");
         }
 
-        const totalSeconds = Math.max(0, minutes * 60 + seconds);
+        const safeTotalSeconds = Math.max(0, minutes * 60 + seconds);
 
         const { error } = await supabase.from("conditioning_logs").insert({
           user_id: userId,
@@ -103,7 +249,7 @@ export default function ConditioningClient() {
           week_start_date: weekStartDate,
           minutes,
           seconds,
-          total_seconds: totalSeconds,
+          total_seconds: safeTotalSeconds,
         });
 
         if (error) throw error;
@@ -140,110 +286,238 @@ export default function ConditioningClient() {
 
   if (loading) {
     return (
-      <main className="p-6">
-        <div className="mx-auto max-w-4xl">Loading...</div>
+      <main className="squad-shell py-6">
+        <div className="squad-card p-6">Loading...</div>
       </main>
     );
   }
 
   return (
-    <main className="p-6">
-      <div className="mx-auto max-w-4xl">
+    <main className="squad-shell py-4 sm:py-6">
+      <div className="squad-page-stack">
         <AppNav />
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h1 className="text-3xl font-bold">{eventConfig.label}</h1>
-          <p className="mt-2 text-slate-300">{eventConfig.description}</p>
+        <section className="squad-card overflow-hidden p-5 sm:p-7">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="squad-label">Conditioning Session</p>
+              <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+                {eventConfig.label}
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+                {eventMeta.helper}
+              </p>
+            </div>
 
-          {eventConfig.type === "time" ? (
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-semibold">Minutes</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={minutes === 0 ? "" : minutes}
-                  onChange={(e) => setMinutes(parseNumberInput(e.target.value))}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
+            <div
+              className={`rounded-3xl border border-white/8 bg-gradient-to-br ${eventMeta.accent} px-5 py-4`}
+            >
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-300">
+                {eventMeta.badge}
+              </p>
+              <p className="mt-2 text-2xl font-bold text-white">
+                {eventMeta.badgeValue}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {amrapDetails && (
+          <section className="squad-card p-5 sm:p-6">
+            <div className="mb-4">
+              <p className="squad-label">{amrapDetails.title}</p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl">
+                {amrapDetails.subtitle}
+              </h2>
+            </div>
+
+            <div className="grid gap-3">
+              {amrapDetails.movements.map((movement) => (
+                <div
+                  key={movement}
+                  className="rounded-2xl border border-white/8 bg-white/4 px-4 py-4 text-base font-semibold text-white sm:px-5"
+                >
+                  {movement}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="squad-card p-5 sm:p-6">
+          <div className="mb-6 grid gap-3 sm:grid-cols-2">
+            <div className="squad-stat-pill">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                Athlete
+              </p>
+              <p className="mt-2 truncate text-base font-semibold text-white">
+                {profileName || "Loading"}
+              </p>
+            </div>
+
+            <div className="squad-stat-pill">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                Type
+              </p>
+              <p className="mt-2 text-base font-semibold text-white">
+                {isTimeWorkout ? "For time" : "AMRAP"}
+              </p>
+            </div>
+          </div>
+
+          {isTimeWorkout ? (
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Stepper
+                  label="Minutes"
+                  value={minutes}
+                  onDecrease={() =>
+                    setMinutes((current) => adjustValue(current, -1, 0))
+                  }
+                  onIncrease={() =>
+                    setMinutes((current) => adjustValue(current, 1, 0))
+                  }
+                  minLabel="Min 0"
+                  disabled={saving || alreadySubmitted}
+                />
+
+                <Stepper
+                  label="Seconds"
+                  value={seconds}
+                  onDecrease={() =>
+                    setSeconds((current) => adjustValue(current, -1, 0, 59))
+                  }
+                  onIncrease={() =>
+                    setSeconds((current) => adjustValue(current, 1, 0, 59))
+                  }
+                  minLabel="Min 0"
+                  maxLabel="Max 59"
+                  disabled={saving || alreadySubmitted}
                 />
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold">Seconds</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={seconds === 0 ? "" : seconds}
-                  onChange={(e) => setSeconds(parseNumberInput(e.target.value))}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
-                />
+              <div className="rounded-3xl border border-white/8 bg-white/4 p-5">
+                <p className="text-sm font-semibold text-slate-300">
+                  Time Preview
+                </p>
+                <p className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
+                  {String(minutes).padStart(2, "0")}:
+                  {String(seconds).padStart(2, "0")}
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  Total seconds: {totalSeconds}
+                </p>
               </div>
             </div>
           ) : (
-            <div className="mt-6 space-y-4">
+            <div className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold">Rounds</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={rounds === 0 ? "" : rounds}
-                    onChange={(e) => setRounds(parseNumberInput(e.target.value))}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
-                  />
-                </div>
+                <Stepper
+                  label="Rounds"
+                  value={rounds}
+                  onDecrease={() =>
+                    setRounds((current) => adjustValue(current, -1, 0))
+                  }
+                  onIncrease={() =>
+                    setRounds((current) => adjustValue(current, 1, 0))
+                  }
+                  minLabel="Min 0"
+                  disabled={saving || alreadySubmitted}
+                />
 
-                <div>
-                  <label className="mb-2 block text-sm font-semibold">Extra Reps</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={44}
-                    value={extraReps === 0 ? "" : extraReps}
-                    onChange={(e) => setExtraReps(parseNumberInput(e.target.value))}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
-                  />
-                </div>
+                <Stepper
+                  label="Extra Reps"
+                  value={extraReps}
+                  onDecrease={() =>
+                    setExtraReps((current) => adjustValue(current, -1, 0, 44))
+                  }
+                  onIncrease={() =>
+                    setExtraReps((current) => adjustValue(current, 1, 0, 44))
+                  }
+                  minLabel="Min 0"
+                  maxLabel="Max 44"
+                  disabled={saving || alreadySubmitted}
+                />
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold">
-                  Prescribed or Scaled/Modified
-                </label>
-                <select
-                  value={effortStyle}
-                  onChange={(e) => setEffortStyle(e.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
+              <div className="rounded-3xl border border-white/8 bg-white/4 p-5">
+                <p className="text-sm font-semibold text-slate-300">Score Preview</p>
+                <p className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                  {rounds} rounds + {extraReps} reps
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  Total reps: {totalAmrapReps}
+                </p>
+              </div>
+
+              <div className="squad-segmented">
+                <button
+                  type="button"
+                  onClick={() => setEffortStyle("prescribed")}
+                  disabled={saving || alreadySubmitted}
+                  className={`rounded-3xl border px-4 py-4 text-left transition ${
+                    effortStyle === "prescribed"
+                      ? "border-blue-400/40 bg-blue-500/12 text-white"
+                      : "border-white/8 bg-white/4 text-slate-300 hover:bg-white/7"
+                  }`}
                 >
-                  <option value="prescribed">Prescribed</option>
-                  <option value="scaled_modified">Scaled/Modified</option>
-                </select>
+                  <p className="text-sm font-semibold">Prescribed</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Logged as written
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEffortStyle("scaled_modified")}
+                  disabled={saving || alreadySubmitted}
+                  className={`rounded-3xl border px-4 py-4 text-left transition ${
+                    effortStyle === "scaled_modified"
+                      ? "border-blue-400/40 bg-blue-500/12 text-white"
+                      : "border-white/8 bg-white/4 text-slate-300 hover:bg-white/7"
+                  }`}
+                >
+                  <p className="text-sm font-semibold">Scaled / Modified</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Different movement or load
+                  </p>
+                </button>
               </div>
 
+              <div className="squad-subtle-divider" />
+
               <div>
-                <label className="mb-2 block text-sm font-semibold">Notes</label>
+                <label className="mb-2 block text-sm font-semibold text-slate-100">
+                  Notes
+                </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={5}
                   placeholder="List weights used, substitutions, or modifications."
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
+                  className="squad-textarea"
+                  disabled={saving || alreadySubmitted}
                 />
               </div>
             </div>
           )}
 
-          <button
-            onClick={handleSave}
-            disabled={saving || message.includes("already submitted")}
-            className="mt-6 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save Workout"}
-          </button>
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              onClick={handleSave}
+              disabled={saving || alreadySubmitted}
+              className="squad-button squad-button-primary"
+            >
+              {saving ? "Saving..." : "Save Workout"}
+            </button>
 
-          {message && <p className="mt-4 text-slate-300">{message}</p>}
-        </div>
+            {message && (
+              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                {message}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </main>
   );
