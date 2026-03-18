@@ -48,17 +48,17 @@ export const STRENGTH_WORKOUTS: Record<StrengthDayKey, StrengthLift[]> = {
   monday: [
     { name: "Front Squat", setCount: 5 },
     { name: "Bench Press", setCount: 5 },
-    { name: "Row", setCount: 5 },
+    { name: "Barbell Row", setCount: 5 },
   ],
   tuesday: [
     { name: "Back Squat", setCount: 5 },
-    { name: "Overhead Press", setCount: 5 },
-    { name: "Pull Up", setCount: 5 },
+    { name: "Bench Press", setCount: 5 },
+    { name: "Barbell Row", setCount: 5 },
   ],
   thursday: [
-    { name: "Deadlift", setCount: 5 },
-    { name: "Incline Bench", setCount: 5 },
-    { name: "RDL", setCount: 5 },
+    { name: "Front Squat", setCount: 5 },
+    { name: "Overhead Press", setCount: 5 },
+    { name: "Deadlift", setCount: 1 },
   ],
 };
 
