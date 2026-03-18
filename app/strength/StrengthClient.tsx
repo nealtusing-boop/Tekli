@@ -38,6 +38,7 @@ type StrengthLogRow = {
   id: string;
   workout_day: string;
   week_start_date: string;
+  created_at?: string | null;
   lift_1: StoredLiftLog;
   lift_2: StoredLiftLog;
   lift_3: StoredLiftLog;
@@ -149,6 +150,18 @@ function createLiftStateFromStoredLog(
   };
 }
 
+function pickNewestLog(rows: StrengthLogRow[] | null | undefined) {
+  if (!rows || rows.length === 0) return null;
+
+  const sorted = [...rows].sort((a, b) => {
+    const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return bTime - aTime;
+  });
+
+  return sorted[0];
+}
+
 export default function StrengthClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -173,130 +186,137 @@ export default function StrengthClient() {
   const workoutDefinition = STRENGTH_WORKOUTS[dayKey];
   const weekStartDate = useMemo(() => getWeekStartDate(), []);
 
-  useEffect(() => {
-    async function loadPage() {
-      setLoading(true);
-      setMessage("");
+  function hydrateFromLog(
+    log: StrengthLogRow | null,
+    settingsMap: Record<string, number>
+  ) {
+    const first = workoutDefinition[0];
+    const second = workoutDefinition[1];
+    const third = workoutDefinition[2];
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    if (log) {
+      setExistingLogId(log.id);
 
-      if (!user) {
-        router.push("/login");
-        return;
-      }
+      setLift1(
+        first
+          ? createLiftStateFromStoredLog(
+              first.name,
+              first.setCount,
+              settingsMap[first.name] || 0,
+              log.lift_1
+            )
+          : null
+      );
 
-      setUserId(user.id);
+      setLift2(
+        second
+          ? createLiftStateFromStoredLog(
+              second.name,
+              second.setCount,
+              settingsMap[second.name] || 0,
+              log.lift_2
+            )
+          : null
+      );
 
-      const [{ data: profile }, { data: settings }, { data: existingLog }] =
-        await Promise.all([
-          supabase
-            .from("profiles")
-            .select("profile_name")
-            .eq("id", user.id)
-            .single(),
-          supabase
-            .from("lift_settings")
-            .select("lift_name, current_weight")
-            .eq("user_id", user.id),
-          supabase
-            .from("strength_logs")
-            .select("id, workout_day, week_start_date, lift_1, lift_2, lift_3")
-            .eq("user_id", user.id)
-            .eq("week_start_date", weekStartDate)
-            .eq("workout_day", dayKey)
-            .maybeSingle(),
-        ]);
+      setLift3(
+        third
+          ? createLiftStateFromStoredLog(
+              third.name,
+              third.setCount,
+              settingsMap[third.name] || 0,
+              log.lift_3
+            )
+          : null
+      );
+    } else {
+      setExistingLogId(null);
 
-      setProfileName(profile?.profile_name || "");
+      setLift1(
+        first
+          ? createLiftState(first.name, first.setCount, settingsMap[first.name] || 0)
+          : null
+      );
 
-      const settingsMap: Record<string, number> = {};
-      (settings || []).forEach((row: LiftSettingRow) => {
-        settingsMap[row.lift_name] = row.current_weight || 0;
-      });
-      setBaseWeights(settingsMap);
+      setLift2(
+        second
+          ? createLiftState(
+              second.name,
+              second.setCount,
+              settingsMap[second.name] || 0
+            )
+          : null
+      );
 
-      const first = workoutDefinition[0];
-      const second = workoutDefinition[1];
-      const third = workoutDefinition[2];
-      const log = (existingLog || null) as StrengthLogRow | null;
+      setLift3(
+        third
+          ? createLiftState(
+              third.name,
+              third.setCount,
+              settingsMap[third.name] || 0
+            )
+          : null
+      );
+    }
+  }
 
-      if (log) {
-        setExistingLogId(log.id);
-        setMessage("Existing log loaded. You can update or delete it.");
+  async function loadPage() {
+    setLoading(true);
+    setMessage("");
 
-        setLift1(
-          first
-            ? createLiftStateFromStoredLog(
-                first.name,
-                first.setCount,
-                settingsMap[first.name] || 0,
-                log.lift_1
-              )
-            : null
-        );
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-        setLift2(
-          second
-            ? createLiftStateFromStoredLog(
-                second.name,
-                second.setCount,
-                settingsMap[second.name] || 0,
-                log.lift_2
-              )
-            : null
-        );
-
-        setLift3(
-          third
-            ? createLiftStateFromStoredLog(
-                third.name,
-                third.setCount,
-                settingsMap[third.name] || 0,
-                log.lift_3
-              )
-            : null
-        );
-      } else {
-        setExistingLogId(null);
-
-        setLift1(
-          first
-            ? createLiftState(
-                first.name,
-                first.setCount,
-                settingsMap[first.name] || 0
-              )
-            : null
-        );
-
-        setLift2(
-          second
-            ? createLiftState(
-                second.name,
-                second.setCount,
-                settingsMap[second.name] || 0
-              )
-            : null
-        );
-
-        setLift3(
-          third
-            ? createLiftState(
-                third.name,
-                third.setCount,
-                settingsMap[third.name] || 0
-              )
-            : null
-        );
-      }
-
-      setLoading(false);
+    if (!user) {
+      router.push("/login");
+      return;
     }
 
+    setUserId(user.id);
+
+    const [{ data: profile }, { data: settings }, { data: logRows, error: logError }] =
+      await Promise.all([
+        supabase.from("profiles").select("profile_name").eq("id", user.id).single(),
+        supabase
+          .from("lift_settings")
+          .select("lift_name, current_weight")
+          .eq("user_id", user.id),
+        supabase
+          .from("strength_logs")
+          .select(
+            "id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3"
+          )
+          .eq("user_id", user.id)
+          .eq("week_start_date", weekStartDate)
+          .eq("workout_day", dayKey),
+      ]);
+
+    if (logError) {
+      setMessage(logError.message);
+    }
+
+    setProfileName(profile?.profile_name || "");
+
+    const settingsMap: Record<string, number> = {};
+    (settings || []).forEach((row: LiftSettingRow) => {
+      settingsMap[row.lift_name] = row.current_weight || 0;
+    });
+    setBaseWeights(settingsMap);
+
+    const newestLog = pickNewestLog((logRows || []) as StrengthLogRow[]);
+    hydrateFromLog(newestLog, settingsMap);
+
+    if (newestLog) {
+      setMessage("Existing log loaded. You can update or delete it.");
+    }
+
+    setLoading(false);
+  }
+
+  useEffect(() => {
     loadPage();
-  }, [dayKey, router, weekStartDate, workoutDefinition]);
+  }, [dayKey, router, weekStartDate]);
 
   function updateSet(
     lift: LiftState | null,
@@ -374,21 +394,14 @@ export default function StrengthClient() {
 
         if (updateError) throw updateError;
       } else {
-        const { error: insertError } = await supabase
+        const { data: insertedRows, error: insertError } = await supabase
           .from("strength_logs")
-          .insert(strengthPayload);
+          .insert(strengthPayload)
+          .select("id");
 
         if (insertError) throw insertError;
 
-        const { data: refreshedLog } = await supabase
-          .from("strength_logs")
-          .select("id")
-          .eq("user_id", userId)
-          .eq("week_start_date", weekStartDate)
-          .eq("workout_day", dayKey)
-          .maybeSingle();
-
-        setExistingLogId(refreshedLog?.id || null);
+        setExistingLogId(insertedRows?.[0]?.id || null);
       }
 
       const upserts = [lift1, lift2, lift3]
@@ -414,6 +427,23 @@ export default function StrengthClient() {
         });
         return next;
       });
+
+      const { data: refreshedRows, error: refreshError } = await supabase
+        .from("strength_logs")
+        .select("id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3")
+        .eq("user_id", userId)
+        .eq("week_start_date", weekStartDate)
+        .eq("workout_day", dayKey);
+
+      if (refreshError) throw refreshError;
+
+      const newestLog = pickNewestLog((refreshedRows || []) as StrengthLogRow[]);
+      const nextSettingsMap = {
+        ...baseWeights,
+        ...Object.fromEntries(upserts.map((row) => [row.lift_name, row.current_weight])),
+      };
+
+      hydrateFromLog(newestLog, nextSettingsMap);
 
       setMessage(existingLogId ? "Strength workout updated." : "Strength workout saved.");
     } catch (error: unknown) {
