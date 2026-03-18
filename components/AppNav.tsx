@@ -104,6 +104,12 @@ export default function AppNav() {
       </nav>
 
       <nav className="md:hidden">
+        <div className="fixed bottom-[92px] right-4 z-40">
+          <div className="rounded-2xl border border-white/10 bg-[rgba(7,15,28,0.92)] px-2 py-2 shadow-[0_16px_40px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+            <LogoutButton />
+          </div>
+        </div>
+
         <div className="squad-mobile-dock">
           <div className="rounded-[28px] border border-white/10 bg-[rgba(7,15,28,0.92)] px-2 py-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
             <div
