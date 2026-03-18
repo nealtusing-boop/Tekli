@@ -105,9 +105,9 @@ export default function AppNav() {
 
       <nav className="md:hidden">
         {pathname === "/" && (
-          <div className="fixed top-4 right-4 z-40">
-            <div className="rounded-xl border border-white/10 bg-[rgba(7,15,28,0.85)] px-2 py-1 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-              <div className="scale-90">
+          <div className="fixed right-3 z-50 top-[max(0.75rem,env(safe-area-inset-top))]">
+            <div className="rounded-lg border border-white/10 bg-[rgba(7,15,28,0.82)] px-1.5 py-1 shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+              <div className="origin-top-right scale-75">
                 <LogoutButton />
               </div>
             </div>
