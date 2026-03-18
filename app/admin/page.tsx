@@ -118,6 +118,7 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [deletingId, setDeletingId] = useState("");
+  const [removingUser, setRemovingUser] = useState(false);
   const [message, setMessage] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -383,6 +384,77 @@ export default function AdminPage() {
     }
   }
 
+  async function handleRemoveUserData() {
+    if (!selectedUserId || !selectedUserName) {
+      setMessage("Select a user first.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Remove ${selectedUserName} from the app?\n\nThis will permanently delete:\n- profile\n- strength logs\n- conditioning logs\n- lift settings\n\nThis does NOT delete their Supabase auth login.`
+    );
+
+    if (!confirmed) return;
+
+    setRemovingUser(true);
+    setMessage("");
+
+    try {
+      const { error: conditioningError } = await supabase
+        .from("conditioning_logs")
+        .delete()
+        .eq("user_id", selectedUserId);
+
+      if (conditioningError) throw conditioningError;
+
+      const { error: strengthError } = await supabase
+        .from("strength_logs")
+        .delete()
+        .eq("user_id", selectedUserId);
+
+      if (strengthError) throw strengthError;
+
+      const { error: settingsError } = await supabase
+        .from("lift_settings")
+        .delete()
+        .eq("user_id", selectedUserId);
+
+      if (settingsError) throw settingsError;
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", selectedUserId);
+
+      if (profileError) throw profileError;
+
+      setProfiles((current) =>
+        current.filter((profile) => profile.id !== selectedUserId)
+      );
+      setSelectedUserId("");
+      setSelectedUserName("");
+      setStrengthLogs([]);
+      setConditioningLogs([]);
+      setLiftSettings([]);
+      setWeights({
+        "Back Squat": 0,
+        "Bench Press": 0,
+        "Barbell Row": 0,
+        "Front Squat": 0,
+        "Overhead Press": 0,
+        Deadlift: 0,
+      });
+
+      setMessage("User data removed from the app.");
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error ? error.message : "Failed to remove user data."
+      );
+    } finally {
+      setRemovingUser(false);
+    }
+  }
+
   function amrapDisplay(log?: ConditioningLog) {
     if (!log) return "No score yet";
     return `${log.rounds || 0} rounds + ${log.extra_reps || 0} reps`;
@@ -425,7 +497,7 @@ export default function AdminPage() {
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
                 Select any user to set their lift weights, review their recent logs,
-                and delete bad entries when needed.
+                delete bad entries, or remove them from the app.
               </p>
             </div>
 
@@ -574,6 +646,30 @@ export default function AdminPage() {
                   className="squad-button squad-button-primary"
                 >
                   {saving ? "Saving..." : "Save Starting Weights"}
+                </button>
+              </div>
+            </section>
+
+            <section className="squad-card p-5 sm:p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="squad-label">Remove User</p>
+                  <h2 className="mt-3 text-3xl font-bold tracking-tight text-red-100">
+                    Remove From App
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-300">
+                    This deletes their profile, logs, and lift settings from the app.
+                    It does not delete their auth login.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRemoveUserData}
+                  disabled={removingUser}
+                  className="rounded-2xl border border-red-400/25 bg-red-500/10 px-5 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-60"
+                >
+                  {removingUser ? "Removing..." : "Remove User"}
                 </button>
               </div>
             </section>
