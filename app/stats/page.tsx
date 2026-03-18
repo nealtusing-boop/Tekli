@@ -7,15 +7,24 @@ import { supabase } from "../../lib/supabase";
 import { calculateCurrentStreak } from "../../lib/streaks";
 import { formatSeconds } from "../../lib/date";
 
+type LiftLogEntry = {
+  name: string;
+  working_weight: number;
+  set_count?: number;
+  sets?: number[];
+  completed?: boolean;
+  next_weight?: number;
+};
+
 type StrengthLog = {
   id: string;
   user_id: string;
   logged_at: string;
   week_start_date: string;
   workout_day: string;
-  lift_1: any;
-  lift_2: any;
-  lift_3: any;
+  lift_1: LiftLogEntry | null;
+  lift_2: LiftLogEntry | null;
+  lift_3: LiftLogEntry | null;
 };
 
 type ConditioningLog = {
@@ -59,7 +68,9 @@ export default function StatsPage() {
 
   const [loading, setLoading] = useState(true);
   const [strengthLogs, setStrengthLogs] = useState<StrengthLog[]>([]);
-  const [conditioningLogs, setConditioningLogs] = useState<ConditioningLog[]>([]);
+  const [conditioningLogs, setConditioningLogs] = useState<ConditioningLog[]>(
+    []
+  );
   const [liftSettings, setLiftSettings] = useState<LiftSetting[]>([]);
   const [userId, setUserId] = useState("");
 

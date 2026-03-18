@@ -5,10 +5,28 @@ import { useRouter } from "next/navigation";
 import AppNav from "../../components/AppNav";
 import { supabase } from "../../lib/supabase";
 import { formatDateTime, formatSeconds } from "../../lib/date";
+import {
+  CONDITIONING_EVENTS,
+  ConditioningEventKey,
+} from "../../lib/schedule";
 
 type Profile = {
   id: string;
   profile_name: string;
+};
+
+type LiftLogEntry = {
+  name: string;
+  working_weight: number;
+  set_count?: number;
+  sets?: number[];
+  completed?: boolean;
+  next_weight?: number;
+};
+
+type LiftSettingRow = {
+  lift_name: string;
+  current_weight: number | null;
 };
 
 type StrengthLog = {
@@ -17,15 +35,15 @@ type StrengthLog = {
   logged_at: string;
   week_start_date: string;
   workout_day: string;
-  lift_1: any;
-  lift_2: any;
-  lift_3: any;
+  lift_1: LiftLogEntry | null;
+  lift_2: LiftLogEntry | null;
+  lift_3: LiftLogEntry | null;
 };
 
 type ConditioningLog = {
   id: string;
   user_id: string;
-  event_name: string;
+  event_name: ConditioningEventKey;
   total_seconds: number | null;
   total_reps: number | null;
   rounds: number | null;
@@ -53,10 +71,45 @@ const LIFTS = [
 const CONDITIONING_CARDS = [
   { key: "5_mile_run", label: "5 Mile Run", kind: "time" },
   { key: "murph", label: "Murph", kind: "time" },
-  { key: "ruck", label: "12 Mile Ruck", kind: "time" },
+  { key: "ruck", label: "40 lb Ruck", kind: "time" },
   { key: "amrap_1", label: "AMRAP #1", kind: "amrap" },
   { key: "amrap_2", label: "AMRAP #2", kind: "amrap" },
 ] as const;
+
+function formatStrengthTitle(workoutDay: string) {
+  if (workoutDay === "tuesday") return "Tuesday Strength";
+  if (workoutDay === "thursday") return "Thursday Strength";
+  if (workoutDay === "monday") return "Monday Strength";
+  return "Strength";
+}
+
+function formatStrengthDetail(log: StrengthLog) {
+  const lifts = [log.lift_1, log.lift_2, log.lift_3].filter(
+    (lift): lift is LiftLogEntry => Boolean(lift)
+  );
+
+  return lifts
+    .map((lift) => `${lift.name}: ${lift.working_weight || 0} lb`)
+    .join(" • ");
+}
+
+function formatConditioningDetail(log: ConditioningLog) {
+  if (log.event_name === "amrap_1" || log.event_name === "amrap_2") {
+    let detail = `${log.rounds || 0} rounds + ${log.extra_reps || 0} reps (${log.total_reps || 0} total)`;
+
+    if (log.effort_style) {
+      detail += ` • ${log.effort_style}`;
+    }
+
+    if (log.notes) {
+      detail += ` • Notes: ${log.notes}`;
+    }
+
+    return detail;
+  }
+
+  return formatSeconds(log.total_seconds);
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -64,6 +117,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState("");
   const [message, setMessage] = useState("");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedUserId, setSelectedUserId] = useState("");
@@ -170,7 +224,7 @@ export default function AdminPage() {
         Deadlift: 0,
       };
 
-      (liftSettingsResult.data || []).forEach((row: any) => {
+      (liftSettingsResult.data || []).forEach((row: LiftSettingRow) => {
         nextWeights[row.lift_name] = row.current_weight || 0;
       });
 
@@ -260,10 +314,72 @@ export default function AdminPage() {
       );
 
       setMessage("Starting weights saved.");
-    } catch (error: any) {
-      setMessage(error?.message || "Failed to save starting weights.");
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error ? error.message : "Failed to save starting weights."
+      );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteStrengthLog(log: StrengthLog) {
+    const confirmed = window.confirm(
+      `Delete this strength log for ${selectedUserName || "this user"}?\n\n${formatStrengthTitle(log.workout_day)}`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingId(`strength-${log.id}`);
+    setMessage("");
+
+    try {
+      const { error } = await supabase
+        .from("strength_logs")
+        .delete()
+        .eq("id", log.id);
+
+      if (error) throw error;
+
+      setStrengthLogs((current) => current.filter((item) => item.id !== log.id));
+      setMessage("Strength log deleted.");
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error ? error.message : "Failed to delete strength log."
+      );
+    } finally {
+      setDeletingId("");
+    }
+  }
+
+  async function handleDeleteConditioningLog(log: ConditioningLog) {
+    const confirmed = window.confirm(
+      `Delete this conditioning log for ${selectedUserName || "this user"}?\n\n${CONDITIONING_EVENTS[log.event_name].label}`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingId(`conditioning-${log.id}`);
+    setMessage("");
+
+    try {
+      const { error } = await supabase
+        .from("conditioning_logs")
+        .delete()
+        .eq("id", log.id);
+
+      if (error) throw error;
+
+      setConditioningLogs((current) => current.filter((item) => item.id !== log.id));
+      setMessage("Conditioning log deleted.");
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete conditioning log."
+      );
+    } finally {
+      setDeletingId("");
     }
   }
 
@@ -308,8 +424,8 @@ export default function AdminPage() {
                 Admin
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-                Select any user to set their lift weights and view their most
-                recent strength and conditioning results.
+                Select any user to set their lift weights, review their recent logs,
+                and delete bad entries when needed.
               </p>
             </div>
 
@@ -343,6 +459,12 @@ export default function AdminPage() {
               ))}
             </select>
           </div>
+
+          {message && (
+            <div className="mt-4 rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
+              {message}
+            </div>
+          )}
         </section>
 
         {selectedUserId ? (
@@ -367,7 +489,7 @@ export default function AdminPage() {
                     </p>
                     <p className="mt-2 text-lg font-bold text-white">
                       {latestStrengthSession
-                        ? latestStrengthSession.workout_day
+                        ? formatStrengthTitle(latestStrengthSession.workout_day)
                         : "No strength logs"}
                     </p>
                     <p className="mt-1 text-sm text-slate-400">
@@ -383,7 +505,8 @@ export default function AdminPage() {
                     </p>
                     <p className="mt-2 text-lg font-bold text-white">
                       {latestConditioningSession
-                        ? latestConditioningSession.event_name
+                        ? CONDITIONING_EVENTS[latestConditioningSession.event_name]
+                            .label
                         : "No conditioning logs"}
                     </p>
                     <p className="mt-1 text-sm text-slate-400">
@@ -452,12 +575,6 @@ export default function AdminPage() {
                 >
                   {saving ? "Saving..." : "Save Starting Weights"}
                 </button>
-
-                {message && (
-                  <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
-                    {message}
-                  </div>
-                )}
               </div>
             </section>
 
@@ -557,6 +674,120 @@ export default function AdminPage() {
                   );
                 })}
               </div>
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-2">
+              <section className="squad-card p-5 sm:p-6">
+                <div className="mb-5">
+                  <p className="squad-label">Delete Logs</p>
+                  <h2 className="mt-3 text-3xl font-bold tracking-tight">
+                    Strength Logs
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Delete incorrect strength entries for this user.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {strengthLogs.length === 0 ? (
+                    <div className="squad-empty">No strength logs yet.</div>
+                  ) : (
+                    strengthLogs.slice(0, 10).map((log) => {
+                      const buttonId = `strength-${log.id}`;
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="rounded-2xl border border-white/8 bg-white/4 p-4"
+                        >
+                          <div className="flex flex-col gap-3">
+                            <div>
+                              <p className="text-lg font-bold text-white">
+                                {formatStrengthTitle(log.workout_day)}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-400">
+                                {formatDateTime(log.logged_at)}
+                              </p>
+                              <p className="mt-3 text-sm leading-6 text-slate-300">
+                                {formatStrengthDetail(log)}
+                              </p>
+                            </div>
+
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteStrengthLog(log)}
+                                disabled={deletingId === buttonId}
+                                className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-60"
+                              >
+                                {deletingId === buttonId
+                                  ? "Deleting..."
+                                  : "Delete Log"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+
+              <section className="squad-card p-5 sm:p-6">
+                <div className="mb-5">
+                  <p className="squad-label">Delete Logs</p>
+                  <h2 className="mt-3 text-3xl font-bold tracking-tight">
+                    Conditioning Logs
+                  </h2>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Delete incorrect conditioning entries for this user.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {conditioningLogs.length === 0 ? (
+                    <div className="squad-empty">No conditioning logs yet.</div>
+                  ) : (
+                    conditioningLogs.slice(0, 10).map((log) => {
+                      const buttonId = `conditioning-${log.id}`;
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="rounded-2xl border border-white/8 bg-white/4 p-4"
+                        >
+                          <div className="flex flex-col gap-3">
+                            <div>
+                              <p className="text-lg font-bold text-white">
+                                {CONDITIONING_EVENTS[log.event_name].label}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-400">
+                                {formatDateTime(log.logged_at)}
+                              </p>
+                              <p className="mt-3 text-sm leading-6 text-slate-300">
+                                {formatConditioningDetail(log)}
+                              </p>
+                            </div>
+
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteConditioningLog(log)}
+                                disabled={deletingId === buttonId}
+                                className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-60"
+                              >
+                                {deletingId === buttonId
+                                  ? "Deleting..."
+                                  : "Delete Log"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
             </section>
           </>
         ) : (

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 export default function SplashScreen() {
@@ -47,9 +48,12 @@ export default function SplashScreen() {
             animateIn ? "scale-100 opacity-100" : "scale-90 opacity-0"
           } ${fadeOut ? "scale-105" : ""}`}
         >
-          <img
+          <Image
             src="/icons/icon-512.png"
             alt="Squad PT"
+            width={80}
+            height={80}
+            priority
             className="h-20 w-20 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.35)]"
           />
         </div>

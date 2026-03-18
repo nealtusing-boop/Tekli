@@ -5,20 +5,33 @@ import { useRouter } from "next/navigation";
 import AppNav from "../../components/AppNav";
 import { supabase } from "../../lib/supabase";
 import { formatDateTime, formatSeconds } from "../../lib/date";
+import {
+  CONDITIONING_EVENTS,
+  ConditioningEventKey,
+} from "../../lib/schedule";
+
+type LiftLogEntry = {
+  name: string;
+  working_weight: number;
+  set_count?: number;
+  sets?: number[];
+  completed?: boolean;
+  next_weight?: number;
+};
 
 type StrengthLog = {
   id: string;
   logged_at: string;
   workout_day: string;
-  lift_1: any;
-  lift_2: any;
-  lift_3: any;
+  lift_1: LiftLogEntry | null;
+  lift_2: LiftLogEntry | null;
+  lift_3: LiftLogEntry | null;
 };
 
 type ConditioningLog = {
   id: string;
   logged_at: string;
-  event_name: string;
+  event_name: ConditioningEventKey;
   total_seconds: number | null;
   rounds: number | null;
   extra_reps: number | null;
@@ -29,6 +42,8 @@ type ConditioningLog = {
 
 type HistoryItem = {
   id: string;
+  rawId: string;
+  table: "strength_logs" | "conditioning_logs";
   logged_at: string;
   type: string;
   title: string;
@@ -36,12 +51,33 @@ type HistoryItem = {
   badge: string;
 };
 
+function formatStrengthDetail(log: StrengthLog) {
+  const lifts = [log.lift_1, log.lift_2, log.lift_3].filter(
+    (lift): lift is LiftLogEntry => Boolean(lift)
+  );
+
+  return lifts
+    .map((lift) => `${lift.name}: ${lift.working_weight || 0} lb`)
+    .join(" • ");
+}
+
+function formatStrengthTitle(workoutDay: string) {
+  if (workoutDay === "tuesday") return "Tuesday Strength";
+  if (workoutDay === "thursday") return "Thursday Strength";
+  if (workoutDay === "monday") return "Monday Strength";
+  return "Strength";
+}
+
 export default function HistoryPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState("");
+  const [message, setMessage] = useState("");
   const [strengthLogs, setStrengthLogs] = useState<StrengthLog[]>([]);
-  const [conditioningLogs, setConditioningLogs] = useState<ConditioningLog[]>([]);
+  const [conditioningLogs, setConditioningLogs] = useState<ConditioningLog[]>(
+    []
+  );
   const [sortBy, setSortBy] = useState("newest");
   const [filterType, setFilterType] = useState("all");
 
@@ -77,27 +113,16 @@ export default function HistoryPage() {
   const historyItems = useMemo(() => {
     const strengthItems: HistoryItem[] = strengthLogs.map((log) => ({
       id: `strength-${log.id}`,
+      rawId: log.id,
+      table: "strength_logs",
       logged_at: log.logged_at,
       type: `${log.workout_day}_strength`,
       badge: "Strength",
-      title:
-        log.workout_day === "tuesday" ? "Tuesday Strength" : "Thursday Strength",
-      detail: [
-        `${log.lift_1?.name}: ${log.lift_1?.working_weight || 0} lb`,
-        `${log.lift_2?.name}: ${log.lift_2?.working_weight || 0} lb`,
-        `${log.lift_3?.name}: ${log.lift_3?.working_weight || 0} lb`,
-      ].join(" • "),
+      title: formatStrengthTitle(log.workout_day),
+      detail: formatStrengthDetail(log),
     }));
 
     const conditioningItems: HistoryItem[] = conditioningLogs.map((log) => {
-      const labelMap: Record<string, string> = {
-        "5_mile_run": "5 Mile Run",
-        murph: "Murph",
-        ruck: "Ruck",
-        amrap_1: "AMRAP #1",
-        amrap_2: "AMRAP #2",
-      };
-
       let detail = "";
 
       if (log.event_name === "amrap_1" || log.event_name === "amrap_2") {
@@ -116,10 +141,12 @@ export default function HistoryPage() {
 
       return {
         id: `conditioning-${log.id}`,
+        rawId: log.id,
+        table: "conditioning_logs" as const,
         logged_at: log.logged_at,
         type: log.event_name,
         badge: "Conditioning",
-        title: labelMap[log.event_name] || log.event_name,
+        title: CONDITIONING_EVENTS[log.event_name].label,
         detail,
       };
     });
@@ -145,6 +172,40 @@ export default function HistoryPage() {
     return allItems;
   }, [strengthLogs, conditioningLogs, sortBy, filterType]);
 
+  async function handleDelete(item: HistoryItem) {
+    const confirmed = window.confirm(
+      `Delete this ${item.badge.toLowerCase()} log?\n\n${item.title}`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingId(item.id);
+    setMessage("");
+
+    try {
+      const { error } = await supabase
+        .from(item.table)
+        .delete()
+        .eq("id", item.rawId);
+
+      if (error) throw error;
+
+      if (item.table === "strength_logs") {
+        setStrengthLogs((current) => current.filter((log) => log.id !== item.rawId));
+      } else {
+        setConditioningLogs((current) =>
+          current.filter((log) => log.id !== item.rawId)
+        );
+      }
+
+      setMessage("Log deleted.");
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : "Failed to delete log.");
+    } finally {
+      setDeletingId("");
+    }
+  }
+
   if (loading) {
     return (
       <main className="squad-shell py-6">
@@ -166,8 +227,8 @@ export default function HistoryPage() {
                 History
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                Review your past sessions, filter by workout type, and track what
-                you’ve completed over time.
+                Review your past sessions, filter by workout type, and remove bad
+                entries when you need to correct a mistake.
               </p>
             </div>
 
@@ -207,45 +268,66 @@ export default function HistoryPage() {
                 className="squad-select"
               >
                 <option value="all">All Workouts</option>
+                <option value="monday_strength">Monday Strength</option>
                 <option value="tuesday_strength">Tuesday Strength</option>
                 <option value="thursday_strength">Thursday Strength</option>
                 <option value="5_mile_run">5 Mile Run</option>
                 <option value="murph">Murph</option>
-                <option value="ruck">Ruck</option>
+                <option value="ruck">40 lb Ruck</option>
                 <option value="amrap_1">AMRAP #1</option>
                 <option value="amrap_2">AMRAP #2</option>
               </select>
             </div>
           </div>
+
+          {message && (
+            <div className="mt-4 rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
+              {message}
+            </div>
+          )}
         </section>
 
         <section className="space-y-4">
           {historyItems.length === 0 ? (
             <div className="squad-empty">
-              No history yet. Once you start logging workouts, they’ll appear here.
+              No history yet. Once you start logging workouts, they’ll appear
+              here.
             </div>
           ) : (
             historyItems.map((item) => (
               <article key={item.id} className="squad-card p-5 sm:p-6">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="mb-3 flex items-center gap-3">
-                      <span className="rounded-full border border-white/8 bg-white/6 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
-                        {item.badge}
-                      </span>
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-3 flex items-center gap-3">
+                        <span className="rounded-full border border-white/8 bg-white/6 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+                          {item.badge}
+                        </span>
+                      </div>
+
+                      <h2 className="text-2xl font-bold tracking-tight">
+                        {item.title}
+                      </h2>
+
+                      <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">
+                        {item.detail}
+                      </p>
                     </div>
 
-                    <h2 className="text-2xl font-bold tracking-tight">
-                      {item.title}
-                    </h2>
-
-                    <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">
-                      {item.detail}
-                    </p>
+                    <div className="shrink-0 rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-300">
+                      {formatDateTime(item.logged_at)}
+                    </div>
                   </div>
 
-                  <div className="shrink-0 rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-300">
-                    {formatDateTime(item.logged_at)}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(item)}
+                      disabled={deletingId === item.id}
+                      className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:opacity-60"
+                    >
+                      {deletingId === item.id ? "Deleting..." : "Delete Log"}
+                    </button>
                   </div>
                 </div>
               </article>

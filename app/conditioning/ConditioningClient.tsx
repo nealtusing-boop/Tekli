@@ -48,7 +48,9 @@ function Stepper({
         </button>
 
         <div className="squad-stepper-value">
-          <p className="text-3xl font-bold tracking-tight sm:text-4xl">{value}</p>
+          <p className="text-3xl font-bold tracking-tight sm:text-4xl">
+            {value}
+          </p>
         </div>
 
         <button
@@ -117,17 +119,14 @@ export default function ConditioningClient() {
           helper: "Enter your finishing time.",
         };
       case "amrap_1":
-        return {
-          badge: "Window",
-          badgeValue: "15 min",
-          accent: "from-blue-400/20 to-cyan-500/15",
-          helper: "Log rounds, extra reps, and whether it was prescribed.",
-        };
       case "amrap_2":
         return {
           badge: "Window",
           badgeValue: "15 min",
-          accent: "from-indigo-400/20 to-blue-500/15",
+          accent:
+            eventKey === "amrap_1"
+              ? "from-blue-400/20 to-cyan-500/15"
+              : "from-indigo-400/20 to-blue-500/15",
           helper: "Log rounds, extra reps, and whether it was prescribed.",
         };
       default:
@@ -141,32 +140,16 @@ export default function ConditioningClient() {
   }, [eventKey]);
 
   const amrapDetails = useMemo(() => {
-    if (eventKey === "amrap_1") {
-      return {
-        title: "Workout",
-        subtitle: "AMRAP #1",
-        movements: [
-          "20 KB Swings @ 53/35",
-          "15 Thrusters @ 40/20",
-          "10 Toes to Bar",
-        ],
-      };
-    }
+    if (eventConfig.type !== "amrap") return null;
 
-    if (eventKey === "amrap_2") {
-      return {
-        title: "Workout",
-        subtitle: "AMRAP #2",
-        movements: [
-          "20 Alt DB Snatches @ 40/20",
-          "15 Russian Twists @ 45/25",
-          "10 Burpee Box Jump Overs",
-        ],
-      };
-    }
-
-    return null;
-  }, [eventKey]);
+    return {
+      title: "Workout",
+      subtitle: eventConfig.title,
+      movements: eventConfig.description.filter(
+        (line) => line && line !== "15 Minute AMRAP"
+      ),
+    };
+  }, [eventConfig]);
 
   useEffect(() => {
     async function loadPage() {
@@ -277,8 +260,12 @@ export default function ConditioningClient() {
       }
 
       setMessage("Conditioning workout saved.");
-    } catch (error: any) {
-      setMessage(error?.message || "Failed to save conditioning workout.");
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to save conditioning workout."
+      );
     } finally {
       setSaving(false);
     }
@@ -441,7 +428,9 @@ export default function ConditioningClient() {
               </div>
 
               <div className="rounded-3xl border border-white/8 bg-white/4 p-5">
-                <p className="text-sm font-semibold text-slate-300">Score Preview</p>
+                <p className="text-sm font-semibold text-slate-300">
+                  Score Preview
+                </p>
                 <p className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl">
                   {rounds} rounds + {extraReps} reps
                 </p>

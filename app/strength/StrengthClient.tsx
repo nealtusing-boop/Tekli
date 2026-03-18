@@ -1,46 +1,131 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppNav from "../../components/AppNav";
 import { supabase } from "../../lib/supabase";
+import {
+  STRENGTH_DAYS,
+  STRENGTH_WORKOUTS,
+  StrengthDayKey,
+} from "../../lib/schedule";
 import { getWeekStartDate } from "../../lib/date";
-import { STRENGTH_WORKOUTS, StrengthDayKey } from "../../lib/schedule";
 
 type LiftState = {
   name: string;
-  setCount: number;
-  workingWeight: number;
+  working_weight: number;
+  set_count: number;
   sets: number[];
+  completed: boolean;
+  next_weight: number;
 };
 
-export default function StrengthPage() {
+type LiftSettingRow = {
+  lift_name: string;
+  current_weight: number | null;
+};
+
+function Stepper({
+  label,
+  value,
+  onDecrease,
+  onIncrease,
+  maxReps,
+  disabled = false,
+}: {
+  label: string;
+  value: number;
+  onDecrease: () => void;
+  onIncrease: () => void;
+  maxReps: number;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="rounded-3xl border border-white/8 bg-white/4 p-4 sm:p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <label className="text-sm font-semibold text-slate-100">{label}</label>
+        <span className="text-xs text-slate-400">0–{maxReps} reps</span>
+      </div>
+
+      <div className="squad-stepper">
+        <button
+          type="button"
+          onClick={onDecrease}
+          disabled={disabled}
+          className="squad-stepper-button"
+        >
+          −
+        </button>
+
+        <div className="squad-stepper-value">
+          <p className="text-3xl font-bold tracking-tight sm:text-4xl">
+            {value}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onIncrease}
+          disabled={disabled}
+          className="squad-stepper-button"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function createLiftState(
+  name: string,
+  setCount: number,
+  workingWeight: number
+): LiftState {
+  return {
+    name,
+    working_weight: workingWeight,
+    set_count: setCount,
+    sets: Array(setCount).fill(0),
+    completed: false,
+    next_weight: workingWeight,
+  };
+}
+
+function calculateNextWeight(
+  liftName: string,
+  completed: boolean,
+  current: number
+) {
+  if (!current || current <= 0) return 0;
+
+  const upper = liftName.toUpperCase();
+
+  if (upper.includes("SQUAT") || upper.includes("DEADLIFT")) {
+    return completed ? current + 10 : Math.max(0, current - 10);
+  }
+
+  return completed ? current + 5 : Math.max(0, current - 5);
+}
+
+export default function StrengthClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [profileName, setProfileName] = useState("");
   const [userId, setUserId] = useState("");
-  const [lifts, setLifts] = useState<LiftState[]>([]);
+  const [profileName, setProfileName] = useState("");
+  const [lift1, setLift1] = useState<LiftState | null>(null);
+  const [lift2, setLift2] = useState<LiftState | null>(null);
+  const [lift3, setLift3] = useState<LiftState | null>(null);
 
-  const dayParam = searchParams.get("day");
-  const strengthDay: StrengthDayKey =
-    dayParam === "thursday" ? "thursday" : "tuesday";
+  const dayParam = searchParams.get("day") as StrengthDayKey | null;
+  const dayKey: StrengthDayKey =
+    dayParam && STRENGTH_DAYS[dayParam] ? dayParam : "tuesday";
 
-  const title =
-    strengthDay === "tuesday" ? "Tuesday Strength" : "Thursday Strength";
-
-  const nextAmrapHref =
-    strengthDay === "tuesday"
-      ? "/conditioning?event=amrap_1"
-      : "/conditioning?event=amrap_2";
-
-  const nextAmrapLabel =
-    strengthDay === "tuesday" ? "Go to AMRAP #1" : "Go to AMRAP #2";
-
+  const dayConfig = STRENGTH_DAYS[dayKey];
+  const workoutDefinition = STRENGTH_WORKOUTS[dayKey];
   const weekStartDate = useMemo(() => getWeekStartDate(), []);
 
   useEffect(() => {
@@ -65,22 +150,7 @@ export default function StrengthPage() {
         .eq("id", user.id)
         .single();
 
-      const currentProfileName = profile?.profile_name || "";
-      setProfileName(currentProfileName);
-
-      const { data: existingLog } = await supabase
-        .from("strength_logs")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("week_start_date", weekStartDate)
-        .eq("workout_day", strengthDay)
-        .maybeSingle();
-
-      if (existingLog) {
-        setMessage("You already submitted this strength workout for this week.");
-      }
-
-      const dayLifts = STRENGTH_WORKOUTS[strengthDay];
+      setProfileName(profile?.profile_name || "");
 
       const { data: settings } = await supabase
         .from("lift_settings")
@@ -89,40 +159,93 @@ export default function StrengthPage() {
 
       const settingsMap = new Map<string, number>();
 
-      (settings || []).forEach((row: any) => {
+      (settings || []).forEach((row: LiftSettingRow) => {
         settingsMap.set(row.lift_name, row.current_weight || 0);
       });
 
-      const initialLifts: LiftState[] = dayLifts.map((lift) => ({
-        name: lift.name,
-        setCount: lift.setCount,
-        workingWeight: settingsMap.get(lift.name) || 0,
-        sets: [0, 0, 0, 0, 0],
-      }));
+      const first = workoutDefinition[0];
+      const second = workoutDefinition[1];
+      const third = workoutDefinition[2];
 
-      setLifts(initialLifts);
+      setLift1(
+        first
+          ? createLiftState(
+              first.name,
+              first.setCount,
+              settingsMap.get(first.name) || 0
+            )
+          : null
+      );
+
+      setLift2(
+        second
+          ? createLiftState(
+              second.name,
+              second.setCount,
+              settingsMap.get(second.name) || 0
+            )
+          : null
+      );
+
+      setLift3(
+        third
+          ? createLiftState(
+              third.name,
+              third.setCount,
+              settingsMap.get(third.name) || 0
+            )
+          : null
+      );
+
+      const { data: existingLog } = await supabase
+        .from("strength_logs")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("week_start_date", weekStartDate)
+        .eq("workout_day", dayKey)
+        .maybeSingle();
+
+      if (existingLog) {
+        setMessage("You already submitted this workout for this week.");
+      }
+
       setLoading(false);
     }
 
     loadPage();
-  }, [router, strengthDay, weekStartDate]);
+  }, [dayKey, router, weekStartDate, workoutDefinition]);
 
-  function updateSet(liftIndex: number, setIndex: number, delta: number) {
-    setLifts((current) =>
-      current.map((lift, currentLiftIndex) => {
-        if (currentLiftIndex !== liftIndex) return lift;
-        if (setIndex >= lift.setCount) return lift;
+  const alreadySubmitted = message.includes("already submitted");
 
-        const nextSets = [...lift.sets];
-        nextSets[setIndex] = Math.max(0, Math.min(5, nextSets[setIndex] + delta));
+  function updateSet(
+    lift: LiftState | null,
+    setLift: (value: LiftState | null) => void,
+    index: number,
+    value: number
+  ) {
+    if (!lift) return;
 
-        return { ...lift, sets: nextSets };
-      })
+    const maxReps = 5;
+    const nextSets = [...lift.sets];
+    nextSets[index] = Math.max(0, Math.min(maxReps, value));
+
+    const completed = nextSets.every((rep) => rep >= maxReps);
+    const nextWeight = calculateNextWeight(
+      lift.name,
+      completed,
+      lift.working_weight
     );
+
+    setLift({
+      ...lift,
+      sets: nextSets,
+      completed,
+      next_weight: nextWeight,
+    });
   }
 
   async function handleSave() {
-    if (!userId || !profileName) {
+    if (!userId || !profileName || !lift1) {
       setMessage("Could not load your profile.");
       return;
     }
@@ -131,58 +254,53 @@ export default function StrengthPage() {
     setMessage("");
 
     try {
-      const liftPayloads = lifts.map((lift) => {
-        const relevantSets = lift.sets.slice(0, lift.setCount);
-        const completed = relevantSets.every((rep) => rep === 5);
-        const nextWeight = completed ? lift.workingWeight + 10 : lift.workingWeight;
-
-        return {
-          name: lift.name,
-          set_count: lift.setCount,
-          working_weight: lift.workingWeight,
-          sets: lift.sets,
-          completed,
-          next_weight: nextWeight,
-        };
-      });
-
-      const { error: insertError } = await supabase.from("strength_logs").insert({
+      const strengthPayload = {
         user_id: userId,
         profile_name: profileName,
-        workout_day: strengthDay,
         week_start_date: weekStartDate,
-        lift_1: liftPayloads[0],
-        lift_2: liftPayloads[1],
-        lift_3: liftPayloads[2],
-      });
+        workout_day: dayKey,
+        lift_1: lift1,
+        lift_2: lift2,
+        lift_3: lift3,
+      };
 
-      if (insertError) {
-        throw insertError;
-      }
+      const { error: logError } = await supabase
+        .from("strength_logs")
+        .insert(strengthPayload);
 
-      const liftSettingsRows = liftPayloads.map((lift) => ({
-        user_id: userId,
-        lift_name: lift.name,
-        current_weight: lift.next_weight,
-      }));
+      if (logError) throw logError;
+
+      const upserts = [lift1, lift2, lift3]
+        .filter((lift): lift is LiftState => Boolean(lift))
+        .map((lift) => ({
+          user_id: userId,
+          lift_name: lift.name,
+          current_weight: lift.next_weight,
+        }));
 
       const { error: settingsError } = await supabase
         .from("lift_settings")
-        .upsert(liftSettingsRows, {
+        .upsert(upserts, {
           onConflict: "user_id,lift_name",
         });
 
-      if (settingsError) {
-        throw settingsError;
-      }
+      if (settingsError) throw settingsError;
 
-      setMessage("Strength workout saved. Continue straight to your AMRAP.");
-    } catch (error: any) {
-      setMessage(error?.message || "Failed to save strength workout.");
+      setMessage("Strength workout saved.");
+    } catch (error: unknown) {
+      setMessage(
+        error instanceof Error ? error.message : "Failed to save strength workout."
+      );
     } finally {
       setSaving(false);
     }
   }
+
+  const lifts = [lift1, lift2, lift3].filter(
+    (lift): lift is LiftState => Boolean(lift)
+  );
+
+  const amrapLink = dayConfig.amrapLink ?? null;
 
   if (loading) {
     return (
@@ -202,121 +320,155 @@ export default function StrengthPage() {
             <div className="max-w-2xl">
               <p className="squad-label">Strength Session</p>
               <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-                {title}
+                {dayConfig.label}
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                Log each set from 0 to 5 reps. Tuesday and Thursday only count as
-                complete training days once the matching AMRAP is also logged.
+                Log each set for every lift. If all reps are hit, the lift counts
+                as passed and the next weight increases automatically.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link href={nextAmrapHref} className="squad-button squad-button-secondary">
-                {nextAmrapLabel}
-              </Link>
-            </div>
+            {amrapLink && (
+              <button
+                type="button"
+                onClick={() => router.push(amrapLink)}
+                className="rounded-3xl border border-blue-400/30 bg-blue-500/12 px-5 py-4 text-left transition hover:bg-blue-500/18"
+              >
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">
+                  Next Up
+                </p>
+                <p className="mt-2 text-xl font-bold text-white">Go to AMRAP</p>
+              </button>
+            )}
           </div>
-        </section>
-
-        <section className="grid gap-6">
-          {lifts.map((lift, liftIndex) => (
-            <div key={lift.name} className="squad-card p-5 sm:p-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="squad-label">Lift</p>
-                  <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
-                    {lift.name}
-                  </h2>
-                  <p className="mt-3 text-slate-300">
-                    Current Working Weight:{" "}
-                    <span className="font-bold text-white">
-                      {lift.workingWeight} lb
-                    </span>
-                  </p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {lift.setCount === 1 ? "This lift is 1x5." : "This lift is 5x5."}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                    Sets
-                  </p>
-                  <p className="mt-2 text-2xl font-bold">{lift.setCount}</p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                {Array.from({ length: lift.setCount }).map((_, setIndex) => {
-                  const disabled =
-                    saving || message.includes("already submitted");
-
-                  const isComplete = lift.sets[setIndex] === 5;
-
-                  return (
-                    <div
-                      key={setIndex}
-                      className={`rounded-3xl border p-4 transition ${
-                        isComplete
-                          ? "border-blue-400/30 bg-blue-500/10"
-                          : "border-white/8 bg-white/4"
-                      }`}
-                    >
-                      <p className="mb-4 text-sm font-semibold uppercase tracking-[0.16em] text-slate-300">
-                        Set {setIndex + 1}
-                      </p>
-
-                      <div className="flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => updateSet(liftIndex, setIndex, -1)}
-                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/8 bg-white/6 text-xl font-bold text-white transition hover:bg-white/10 disabled:opacity-40"
-                        >
-                          −
-                        </button>
-
-                        <span className="min-w-[44px] text-center text-3xl font-bold">
-                          {lift.sets[setIndex]}
-                        </span>
-
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => updateSet(liftIndex, setIndex, 1)}
-                          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/8 bg-white/6 text-xl font-bold text-white transition hover:bg-white/10 disabled:opacity-40"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
         </section>
 
         <section className="squad-card p-5 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
-            <button
-              onClick={handleSave}
-              disabled={saving || message.includes("already submitted")}
-              className="squad-button squad-button-primary"
-            >
-              {saving ? "Saving..." : "Save Strength Workout"}
-            </button>
+          <div className="mb-6 grid gap-3 sm:grid-cols-2">
+            <div className="squad-stat-pill">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                Athlete
+              </p>
+              <p className="mt-2 truncate text-base font-semibold text-white">
+                {profileName || "Loading"}
+              </p>
+            </div>
 
-            <Link href={nextAmrapHref} className="squad-button squad-button-secondary">
-              {nextAmrapLabel}
-            </Link>
+            <div className="squad-stat-pill">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                Day
+              </p>
+              <p className="mt-2 text-base font-semibold text-white">
+                {dayConfig.label}
+              </p>
+            </div>
           </div>
 
-          {message && (
-            <div className="mt-4 rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
-              {message}
-            </div>
-          )}
+          <div className="space-y-6">
+            {lifts.map((lift, liftIndex) => (
+              <div
+                key={`${lift.name}-${liftIndex}`}
+                className="rounded-3xl border border-white/8 bg-white/4 p-4 sm:p-5"
+              >
+                <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                      Lift {liftIndex + 1}
+                    </p>
+                    <h2 className="mt-2 text-2xl font-bold tracking-tight text-white">
+                      {lift.name}
+                    </h2>
+                    <p className="mt-2 text-sm text-slate-400">
+                      {lift.set_count} set{lift.set_count === 1 ? "" : "s"} of 5 reps
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                      Working Weight
+                    </p>
+                    <p className="mt-2 text-2xl font-bold text-white">
+                      {lift.working_weight} lb
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  className={`grid gap-4 ${
+                    lift.set_count === 1
+                      ? "md:grid-cols-1"
+                      : lift.set_count === 5
+                      ? "md:grid-cols-2 xl:grid-cols-5"
+                      : "md:grid-cols-2"
+                  }`}
+                >
+                  {lift.sets.map((setValue, setIndex) => (
+                    <Stepper
+                      key={`${lift.name}-set-${setIndex}`}
+                      label={`Set ${setIndex + 1}`}
+                      value={setValue}
+                      onDecrease={() => {
+                        if (liftIndex === 0) {
+                          updateSet(lift1, setLift1, setIndex, setValue - 1);
+                        } else if (liftIndex === 1) {
+                          updateSet(lift2, setLift2, setIndex, setValue - 1);
+                        } else {
+                          updateSet(lift3, setLift3, setIndex, setValue - 1);
+                        }
+                      }}
+                      onIncrease={() => {
+                        if (liftIndex === 0) {
+                          updateSet(lift1, setLift1, setIndex, setValue + 1);
+                        } else if (liftIndex === 1) {
+                          updateSet(lift2, setLift2, setIndex, setValue + 1);
+                        } else {
+                          updateSet(lift3, setLift3, setIndex, setValue + 1);
+                        }
+                      }}
+                      maxReps={5}
+                      disabled={saving || alreadySubmitted}
+                    />
+                  ))}
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/8 bg-black/18 px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                      Status
+                    </p>
+                    <p className="mt-2 text-lg font-bold text-white">
+                      {lift.completed ? "Passed" : "Not passed yet"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/8 bg-black/18 px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                      Next Weight
+                    </p>
+                    <p className="mt-2 text-lg font-bold text-white">
+                      {lift.next_weight} lb
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              onClick={handleSave}
+              disabled={saving || alreadySubmitted}
+              className="squad-button squad-button-primary"
+            >
+              {saving ? "Saving..." : "Save Workout"}
+            </button>
+
+            {message && (
+              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                {message}
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </main>
