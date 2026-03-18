@@ -94,20 +94,9 @@ function Stepper({
   );
 }
 
-function calculateNextWeight(
-  liftName: string,
-  completed: boolean,
-  current: number
-) {
+function calculateNextWeight(completed: boolean, current: number) {
   if (!current || current <= 0) return 0;
-
-  const upper = liftName.toUpperCase();
-
-  if (upper.includes("SQUAT") || upper.includes("DEADLIFT")) {
-    return completed ? current + 10 : Math.max(0, current - 10);
-  }
-
-  return completed ? current + 5 : Math.max(0, current - 5);
+  return completed ? current + 10 : current;
 }
 
 function createLiftState(
@@ -116,7 +105,7 @@ function createLiftState(
   workingWeight: number
 ): LiftState {
   const sets = Array(setCount).fill(0);
-  const completed = sets.every((rep) => rep >= 5);
+  const completed = false;
 
   return {
     name,
@@ -124,7 +113,7 @@ function createLiftState(
     set_count: setCount,
     sets,
     completed,
-    next_weight: calculateNextWeight(name, completed, workingWeight),
+    next_weight: calculateNextWeight(completed, workingWeight),
   };
 }
 
@@ -141,7 +130,7 @@ function createLiftStateFromStoredLog(
       ? storedLift.working_weight
       : fallbackWeight;
 
-  const rawSets = Array.isArray(storedLift?.sets) ? storedLift?.sets : [];
+  const rawSets = Array.isArray(storedLift?.sets) ? storedLift.sets : [];
   const sets = Array.from({ length: setCount }, (_, index) => {
     const value = rawSets[index];
     if (typeof value !== "number") return 0;
@@ -156,7 +145,7 @@ function createLiftStateFromStoredLog(
     set_count: setCount,
     sets,
     completed,
-    next_weight: calculateNextWeight(name, completed, workingWeight),
+    next_weight: calculateNextWeight(completed, workingWeight),
   };
 }
 
@@ -321,11 +310,7 @@ export default function StrengthClient() {
     nextSets[index] = Math.max(0, Math.min(5, value));
 
     const completed = nextSets.every((rep) => rep >= 5);
-    const nextWeight = calculateNextWeight(
-      lift.name,
-      completed,
-      lift.working_weight
-    );
+    const nextWeight = calculateNextWeight(completed, lift.working_weight);
 
     setLift({
       ...lift,
@@ -500,8 +485,8 @@ export default function StrengthClient() {
                 {dayConfig.label}
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                Log each set for every lift. If all reps are hit, the lift counts
-                as passed and the next weight increases automatically.
+                Log each set for every lift. Complete all prescribed reps and the
+                next weight goes up by 10. Miss reps and the weight stays the same.
               </p>
             </div>
 
