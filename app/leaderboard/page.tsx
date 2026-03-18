@@ -310,7 +310,7 @@ export default function LeaderboardPage() {
 
           <LeaderboardSection
             title="Longest Streak"
-            subtitle="Most consecutive completed training days. Tuesday and Thursday only count when both workouts are logged."
+            subtitle="Most consecutive completed training days."
             rows={streakLeaders}
             formatter={(value) => `${value} days`}
           />

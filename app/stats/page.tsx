@@ -210,10 +210,16 @@ export default function StatsPage() {
 
               <div className="rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-right">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
-                  Rule
+                  Active
                 </p>
-                <p className="mt-2 text-sm font-semibold text-white">
-                  Week counts only after all 5 days are complete
+                <p className="mt-2 text-lg font-bold text-white">
+                  {streak === 0
+                    ? "Restart"
+                    : streak < 5
+                    ? "Building"
+                    : streak < 15
+                    ? "Strong"
+                    : "Locked In"}
                 </p>
               </div>
             </div>
