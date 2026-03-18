@@ -7,6 +7,11 @@ export type ConditioningEventKey =
   | "amrap_1"
   | "amrap_2";
 
+export type StrengthLift = {
+  name: string;
+  setCount: number;
+};
+
 export const STRENGTH_DAYS: Record<
   StrengthDayKey,
   {
@@ -37,6 +42,24 @@ export const STRENGTH_DAYS: Record<
     liftLabel: "Deadlift",
     conditioningEvent: "amrap_2",
   },
+};
+
+export const STRENGTH_WORKOUTS: Record<StrengthDayKey, StrengthLift[]> = {
+  monday: [
+    { name: "Front Squat", setCount: 5 },
+    { name: "Bench Press", setCount: 5 },
+    { name: "Row", setCount: 5 },
+  ],
+  tuesday: [
+    { name: "Back Squat", setCount: 5 },
+    { name: "Overhead Press", setCount: 5 },
+    { name: "Pull Up", setCount: 5 },
+  ],
+  thursday: [
+    { name: "Deadlift", setCount: 5 },
+    { name: "Incline Bench", setCount: 5 },
+    { name: "RDL", setCount: 5 },
+  ],
 };
 
 export const CONDITIONING_EVENTS: Record<
