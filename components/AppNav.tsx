@@ -104,37 +104,6 @@ export default function AppNav() {
       </nav>
 
       <nav className="md:hidden">
-        <div className="squad-card squad-glow overflow-hidden px-4 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="squad-label">Squad PT</p>
-              <p className="mt-1 text-sm text-slate-300">Training tracker</p>
-            </div>
-
-            <LogoutButton />
-          </div>
-
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {links.map((link) => {
-              const isActive = isActivePath(pathname, link.href);
-
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`shrink-0 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
-                    isActive
-                      ? "bg-white !text-slate-950 border border-white shadow-[0_14px_36px_rgba(255,255,255,0.14)]"
-                      : "border border-white/8 bg-white/5 text-slate-100 hover:bg-white/9"
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
         <div className="squad-mobile-dock">
           <div className="rounded-[28px] border border-white/10 bg-[rgba(7,15,28,0.92)] px-2 py-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
             <div
