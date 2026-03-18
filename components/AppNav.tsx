@@ -42,28 +42,41 @@ export default function AppNav() {
   ];
 
   return (
-    <div className="mb-6 flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-900/95 p-4 shadow-lg md:flex-row md:items-center md:justify-between">
-      <div className="flex flex-wrap gap-2">
-        {links.map((link) => {
-          const isActive = pathname === link.href;
+    <nav className="squad-card sticky top-4 z-40 overflow-hidden px-3 py-3 md:px-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <div className="mb-3 flex items-center gap-3 px-1 md:mb-0 md:hidden">
+            <div>
+              <p className="squad-label">Squad PT</p>
+              <p className="mt-1 text-sm text-slate-300">Training tracker</p>
+            </div>
+          </div>
 
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-                isActive
-                  ? "bg-white text-slate-950 shadow"
-                  : "bg-slate-800 text-white hover:bg-slate-700"
-              }`}
-            >
-              {link.label}
-            </Link>
-          );
-        })}
+          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {links.map((link) => {
+              const isActive = pathname === link.href;
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`shrink-0 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                    isActive
+                      ? "bg-white text-slate-950 shadow-[0_10px_30px_rgba(255,255,255,0.12)]"
+                      : "border border-white/8 bg-white/5 text-white hover:bg-white/9"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <LogoutButton />
+        </div>
       </div>
-
-      <LogoutButton />
-    </div>
+    </nav>
   );
 }

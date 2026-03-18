@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Squad PT",
-  description: "Squad PT tracker",
+  description: "Premium squad PT tracker",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-950 text-white">{children}</body>
+      <body>{children}</body>
     </html>
   );
 }

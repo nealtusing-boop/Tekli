@@ -69,91 +69,116 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6">
-        <h1 className="text-3xl font-bold">Squad PT</h1>
-        <p className="mt-2 text-slate-300">
-          {mode === "login" ? "Log in to your account" : "Create your account"}
-        </p>
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8 sm:px-6">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute left-1/2 top-0 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-blue-500/10 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-[320px] w-[320px] rounded-full bg-cyan-400/6 blur-3xl" />
+      </div>
 
-        <div className="mt-6 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setMode("login")}
-            className={`rounded-xl px-4 py-2 font-semibold ${
-              mode === "login"
-                ? "bg-white text-slate-950"
-                : "bg-slate-800 text-white"
-            }`}
-          >
-            Login
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMode("signup")}
-            className={`rounded-xl px-4 py-2 font-semibold ${
-              mode === "signup"
-                ? "bg-white text-slate-950"
-                : "bg-slate-800 text-white"
-            }`}
-          >
-            Sign Up
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-semibold">Email</label>
-            <input
-              type="email"
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+      <div className="relative z-10 w-full max-w-md">
+        <div className="squad-card-strong overflow-hidden p-5 sm:p-7">
+          <div className="mb-6">
+            <p className="squad-label">Squad PT</p>
+            <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight">
+              {mode === "login" ? "Welcome back" : "Create your account"}
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">
+              {mode === "login"
+                ? "Log in to your squad training account."
+                : "Set up your login and profile name to join the app."}
+            </p>
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold">Password</label>
-            <input
-              type="password"
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+          <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-white/8 bg-white/4 p-1">
+            <button
+              type="button"
+              onClick={() => setMode("login")}
+              className={`rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                mode === "login"
+                  ? "bg-white text-slate-950 shadow"
+                  : "text-slate-300 hover:bg-white/6"
+              }`}
+            >
+              Login
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode("signup")}
+              className={`rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                mode === "signup"
+                  ? "bg-white text-slate-950 shadow"
+                  : "text-slate-300 hover:bg-white/6"
+              }`}
+            >
+              Sign Up
+            </button>
           </div>
 
-          {mode === "signup" && (
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-semibold">
-                Profile Name
+              <label className="mb-2 block text-sm font-semibold text-slate-100">
+                Email
               </label>
               <input
-                type="text"
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
+                type="email"
+                className="squad-input"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-100">
+                Password
+              </label>
+              <input
+                type="password"
+                className="squad-input"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+
+            {mode === "signup" && (
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-100">
+                  Profile Name
+                </label>
+                <input
+                  type="text"
+                  className="squad-input"
+                  placeholder="How your name should appear"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="squad-button squad-button-primary mt-2 w-full py-4 text-base"
+            >
+              {loading
+                ? "Working..."
+                : mode === "login"
+                ? "Log In"
+                : "Create Account"}
+            </button>
+          </form>
+
+          {message && (
+            <div className="mt-4 rounded-2xl border border-white/8 bg-white/4 px-4 py-3 text-sm text-slate-200">
+              {message}
+            </div>
           )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
-          >
-            {loading
-              ? "Working..."
-              : mode === "login"
-              ? "Log In"
-              : "Create Account"}
-          </button>
-        </form>
-
-        {message && <p className="mt-4 text-sm text-slate-300">{message}</p>}
+        </div>
       </div>
     </main>
   );

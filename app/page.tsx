@@ -161,69 +161,91 @@ export default function TodayPage() {
   }
 
   function goNextDay() {
-    setSelectedDayIndex((current) => Math.min(WEEK_PLANS.length - 1, current + 1));
+    setSelectedDayIndex((current) =>
+      Math.min(WEEK_PLANS.length - 1, current + 1)
+    );
   }
 
   if (loading) {
     return (
-      <main className="p-6">
-        <div className="mx-auto max-w-5xl">Loading...</div>
+      <main className="squad-shell py-6">
+        <div className="squad-card p-6">Loading...</div>
       </main>
     );
   }
 
   return (
-    <main className="p-6">
-      <div className="mx-auto max-w-5xl">
+    <main className="squad-shell py-4 sm:py-6">
+      <div className="squad-page-stack">
         <AppNav />
 
-        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
-            Squad PT
-          </p>
-          <h1 className="mt-2 text-4xl font-bold">Today</h1>
-          <p className="mt-3 text-slate-300">
-            Welcome{profileName ? `, ${profileName}` : ""}. View this week’s
-            workout plan and log the correct session.
-          </p>
-        </div>
+        <section className="squad-card overflow-hidden p-5 sm:p-7">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="squad-label">Squad PT</p>
+              <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+                Today
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+                Welcome{profileName ? `, ${profileName}` : ""}. View the week,
+                pick the correct training day, and log your session fast.
+              </p>
+            </div>
 
-        <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-          <div className="flex items-center justify-between gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+              {selectedPlan.actions.map((action) => (
+                <Link
+                  key={action.href}
+                  href={action.href}
+                  className="squad-button squad-button-primary"
+                >
+                  {action.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="squad-card p-4 sm:p-6">
+          <div className="mb-5 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={goPreviousDay}
               disabled={selectedDayIndex === 0}
-              className="rounded-2xl border border-slate-700 bg-slate-800 px-4 py-3 text-xl font-bold text-white transition hover:bg-slate-700 disabled:opacity-40"
+              className="squad-button squad-button-secondary h-12 w-12 rounded-2xl p-0 text-xl"
             >
               ←
             </button>
 
             <div className="text-center">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Selected Day
-              </p>
-              <h2 className="mt-1 text-3xl font-bold">{selectedPlan.label}</h2>
-              <p className="mt-1 text-sm text-slate-400">{displayedDate}</p>
+              <p className="squad-label">Selected Day</p>
+              <h2 className="squad-title mt-2 text-3xl font-bold sm:text-4xl">
+                {selectedPlan.label}
+              </h2>
+              <p className="mt-2 text-sm text-slate-400">{displayedDate}</p>
             </div>
 
             <button
               type="button"
               onClick={goNextDay}
               disabled={selectedDayIndex === WEEK_PLANS.length - 1}
-              className="rounded-2xl border border-slate-700 bg-slate-800 px-4 py-3 text-xl font-bold text-white transition hover:bg-slate-700 disabled:opacity-40"
+              className="squad-button squad-button-secondary h-12 w-12 rounded-2xl p-0 text-xl"
             >
               →
             </button>
           </div>
 
-          <div className="mt-6 rounded-3xl border border-slate-800 bg-slate-950 p-6">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-blue-400">
-              Workout
-            </p>
-            <h3 className="mt-2 text-3xl font-bold">{selectedPlan.title}</h3>
+          <div className="squad-card-strong p-5 sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="squad-label">Workout</p>
+                <h3 className="squad-title mt-3 text-3xl font-bold tracking-tight">
+                  {selectedPlan.title}
+                </h3>
+              </div>
+            </div>
 
-            <div className="mt-5 space-y-2 text-slate-300">
+            <div className="space-y-2 text-base leading-7 text-slate-200">
               {selectedPlan.description.map((line, index) =>
                 line === "" ? (
                   <div key={index} className="h-3" />
@@ -238,7 +260,7 @@ export default function TodayPage() {
                 <Link
                   key={action.href}
                   href={action.href}
-                  className="rounded-2xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-500"
+                  className="squad-button squad-button-primary"
                 >
                   {action.label}
                 </Link>
@@ -246,7 +268,7 @@ export default function TodayPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-3 md:grid-cols-5">
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
             {WEEK_PLANS.map((plan, index) => {
               const isSelected = index === selectedDayIndex;
 
@@ -255,19 +277,21 @@ export default function TodayPage() {
                   key={plan.key}
                   type="button"
                   onClick={() => setSelectedDayIndex(index)}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                  className={`rounded-[22px] border p-4 text-left transition ${
                     isSelected
-                      ? "border-blue-500 bg-blue-500/10 text-white"
-                      : "border-slate-800 bg-slate-950 text-slate-300 hover:bg-slate-900"
+                      ? "border-blue-400/50 bg-blue-500/12 text-white shadow-[0_12px_32px_rgba(47,109,246,0.18)]"
+                      : "border-white/8 bg-white/4 text-slate-200 hover:bg-white/7"
                   }`}
                 >
-                  <p className="font-semibold">{plan.label}</p>
-                  <p className="mt-1 text-sm opacity-80">{plan.title}</p>
+                  <p className="text-base font-semibold">{plan.label}</p>
+                  <p className="mt-2 text-sm leading-5 text-slate-300">
+                    {plan.title}
+                  </p>
                 </button>
               );
             })}
           </div>
-        </div>
+        </section>
       </div>
     </main>
   );

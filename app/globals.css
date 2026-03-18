@@ -1,7 +1,234 @@
 @import "tailwindcss";
 
+:root {
+  --bg: #07111f;
+  --bg-soft: #0b1729;
+  --panel: rgba(10, 22, 39, 0.82);
+  --panel-strong: rgba(7, 15, 28, 0.92);
+  --panel-border: rgba(148, 163, 184, 0.12);
+  --text: #f8fafc;
+  --muted: #9fb0c7;
+  --muted-strong: #c9d5e4;
+  --accent: #4f8cff;
+  --accent-strong: #2f6df6;
+  --accent-soft: rgba(79, 140, 255, 0.16);
+  --success: #22c55e;
+  --danger: #ef4444;
+  --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(79, 140, 255, 0.14), transparent 30%),
+    linear-gradient(180deg, #07111f 0%, #081222 35%, #050c17 100%);
+  background-color: var(--bg);
+}
+
 body {
-  background-color: #0f172a;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background:
+    radial-gradient(circle at top, rgba(79, 140, 255, 0.14), transparent 30%),
+    linear-gradient(180deg, #07111f 0%, #081222 35%, #050c17 100%);
+  background-attachment: fixed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(79, 140, 255, 0.32);
   color: white;
-  font-family: sans-serif;
+}
+
+.squad-shell {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+@media (min-width: 640px) {
+  .squad-shell {
+    padding: 24px;
+  }
+}
+
+.squad-card {
+  border: 1px solid var(--panel-border);
+  background: linear-gradient(
+    180deg,
+    rgba(13, 26, 45, 0.92) 0%,
+    rgba(8, 17, 31, 0.95) 100%
+  );
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: var(--radius-xl);
+}
+
+.squad-card-strong {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(
+    180deg,
+    rgba(8, 18, 34, 0.96) 0%,
+    rgba(4, 10, 20, 0.98) 100%
+  );
+  box-shadow: var(--shadow);
+  border-radius: var(--radius-2xl);
+}
+
+.squad-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #86a8d8;
+}
+
+.squad-muted {
+  color: var(--muted);
+}
+
+.squad-title {
+  letter-spacing: -0.03em;
+}
+
+.squad-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 12px 16px;
+  font-weight: 700;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    opacity 0.18s ease,
+    box-shadow 0.18s ease;
+  cursor: pointer;
+}
+
+.squad-button:hover {
+  transform: translateY(-1px);
+}
+
+.squad-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.squad-button-primary {
+  color: white;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+  box-shadow: 0 10px 30px rgba(47, 109, 246, 0.28);
+}
+
+.squad-button-primary:hover {
+  filter: brightness(1.05);
+}
+
+.squad-button-secondary {
+  color: white;
+  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.squad-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.squad-button-danger {
+  color: white;
+  background: linear-gradient(135deg, #ff3d54 0%, #e11d48 100%);
+  box-shadow: 0 10px 24px rgba(225, 29, 72, 0.24);
+}
+
+.squad-input,
+.squad-select,
+.squad-textarea {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 8, 18, 0.88);
+  color: white;
+  padding: 14px 16px;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.squad-input::placeholder,
+.squad-textarea::placeholder {
+  color: #70839e;
+}
+
+.squad-input:focus,
+.squad-select:focus,
+.squad-textarea:focus {
+  border-color: rgba(79, 140, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(79, 140, 255, 0.14);
+  background: rgba(4, 12, 24, 0.96);
+}
+
+.squad-grid-cards {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .squad-grid-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .squad-grid-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.squad-empty {
+  border: 1px dashed rgba(148, 163, 184, 0.2);
+  border-radius: 24px;
+  padding: 24px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.squad-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .squad-page-stack {
+    gap: 24px;
+  }
 }
