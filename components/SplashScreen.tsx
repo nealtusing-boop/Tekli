@@ -9,11 +9,11 @@ export default function SplashScreen() {
   useEffect(() => {
     const timer1 = setTimeout(() => {
       setFadeOut(true);
-    }, 900); // how long it stays visible
+    }, 1500); // stays visible longer
 
     const timer2 = setTimeout(() => {
       setVisible(false);
-    }, 1300); // total duration (fade out included)
+    }, 2000); // total duration
 
     return () => {
       clearTimeout(timer1);
