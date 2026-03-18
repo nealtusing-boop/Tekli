@@ -137,131 +137,205 @@ export default function LeaderboardPage() {
 
   if (loading) {
     return (
-      <main className="p-6">
-        <div className="mx-auto max-w-6xl">Loading...</div>
+      <main className="squad-shell py-6">
+        <div className="squad-card p-6">Loading...</div>
       </main>
     );
   }
 
-  function getRowStyle(index: number) {
-    if (index === 0) {
-      return "border-yellow-400 bg-yellow-400/10";
-    }
-
-    if (index === 1) {
-      return "border-slate-300 bg-slate-300/10";
-    }
-
-    if (index === 2) {
-      return "border-amber-700 bg-amber-700/10";
-    }
-
-    return "border-slate-800 bg-slate-950";
-  }
-
-  function getRankLabel(index: number) {
+  function rankBadge(index: number) {
     if (index === 0) return "🥇";
     if (index === 1) return "🥈";
     if (index === 2) return "🥉";
     return `#${index + 1}`;
   }
 
+  function rankCardClass(index: number) {
+    if (index === 0) {
+      return "border-yellow-300/30 bg-yellow-300/10";
+    }
+
+    if (index === 1) {
+      return "border-slate-200/20 bg-slate-200/8";
+    }
+
+    if (index === 2) {
+      return "border-amber-500/25 bg-amber-500/10";
+    }
+
+    return "border-white/8 bg-white/4";
+  }
+
   function LeaderboardSection({
     title,
+    subtitle,
     rows,
     formatter,
   }: {
     title: string;
+    subtitle: string;
     rows: LeaderRow[];
     formatter: (value: number) => string;
   }) {
+    const topThree = rows.slice(0, 3);
+    const rest = rows.slice(3, 10);
+
     return (
-      <div className="rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-        <h2 className="mb-4 text-2xl font-bold">{title}</h2>
+      <section className="squad-card p-5 sm:p-6">
+        <div className="mb-5">
+          <p className="squad-label">Leaderboard</p>
+          <h2 className="mt-3 text-2xl font-bold tracking-tight sm:text-3xl">
+            {title}
+          </h2>
+          <p className="mt-2 text-sm text-slate-400">{subtitle}</p>
+        </div>
 
-        <div className="space-y-3">
-          {rows.length === 0 ? (
-            <p className="text-slate-400">No data yet.</p>
-          ) : (
-            rows.slice(0, 10).map((row, index) => (
-              <div
-                key={`${title}-${row.user_id}`}
-                className={`flex items-center justify-between rounded-2xl border p-4 transition ${getRowStyle(
-                  index
-                )}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="min-w-[52px] text-lg font-bold">
-                    {getRankLabel(index)}
-                  </div>
+        {rows.length === 0 ? (
+          <div className="squad-empty">
+            No data yet. Once the squad starts logging scores, rankings will
+            show here.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3">
+              {topThree.map((row, index) => (
+                <div
+                  key={`${title}-${row.user_id}`}
+                  className={`rounded-3xl border p-4 sm:p-5 ${rankCardClass(index)}`}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-black/20 text-xl font-bold">
+                        {rankBadge(index)}
+                      </div>
 
-                  <div>
-                    <p className="font-bold">{row.profile_name}</p>
-                    {index < 3 && (
-                      <p className="text-sm text-slate-300">Top performer</p>
-                    )}
+                      <div>
+                        <p className="text-lg font-bold">{row.profile_name}</p>
+                        <p className="text-sm text-slate-300">Top performer</p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-2xl font-bold">{formatter(row.value)}</p>
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
 
-                <div className="text-right text-lg font-bold">
-                  {formatter(row.value)}
+            {rest.length > 0 && (
+              <div className="rounded-3xl border border-white/8 bg-black/18 p-3">
+                <div className="space-y-2">
+                  {rest.map((row, index) => (
+                    <div
+                      key={`${title}-rest-${row.user_id}`}
+                      className="flex items-center justify-between rounded-2xl border border-white/6 bg-white/4 px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="min-w-[40px] text-sm font-semibold text-slate-300">
+                          #{index + 4}
+                        </div>
+                        <p className="font-semibold text-white">
+                          {row.profile_name}
+                        </p>
+                      </div>
+
+                      <p className="font-bold text-white">
+                        {formatter(row.value)}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        )}
+      </section>
     );
   }
 
   return (
-    <main className="p-6">
-      <div className="mx-auto max-w-6xl">
+    <main className="squad-shell py-4 sm:py-6">
+      <div className="squad-page-stack">
         <AppNav />
 
-        <div className="mb-6 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-lg">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
-            Squad Results
-          </p>
-          <h1 className="mt-2 text-4xl font-bold">Leaderboard</h1>
-          <p className="mt-3 text-slate-300">
-            Best scores across the squad for timed events, AMRAPs, and streaks.
-          </p>
-        </div>
+        <section className="squad-card overflow-hidden p-5 sm:p-7">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="squad-label">Squad Results</p>
+              <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+                Leaderboard
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+                Compare the squad’s best times, top AMRAPs, and longest active
+                streaks.
+              </p>
+            </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4 text-center">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  Timed
+                </p>
+                <p className="mt-2 text-2xl font-bold">3</p>
+              </div>
+
+              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4 text-center">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  AMRAP
+                </p>
+                <p className="mt-2 text-2xl font-bold">2</p>
+              </div>
+
+              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-4 text-center">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                  Streak
+                </p>
+                <p className="mt-2 text-2xl font-bold">1</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-6 xl:grid-cols-2">
           <LeaderboardSection
             title="Fastest 5 Mile Run"
+            subtitle="Lowest time wins."
             rows={runLeaders}
             formatter={(value) => formatSeconds(value)}
           />
 
           <LeaderboardSection
             title="Fastest Murph"
+            subtitle="Lowest time wins."
             rows={murphLeaders}
             formatter={(value) => formatSeconds(value)}
           />
 
           <LeaderboardSection
             title="Fastest Ruck"
+            subtitle="Lowest time wins."
             rows={ruckLeaders}
             formatter={(value) => formatSeconds(value)}
           />
 
           <LeaderboardSection
             title="Highest AMRAP #1"
+            subtitle="Highest total reps wins."
             rows={amrap1Leaders}
             formatter={(value) => `${value} reps`}
           />
 
           <LeaderboardSection
             title="Highest AMRAP #2"
+            subtitle="Highest total reps wins."
             rows={amrap2Leaders}
             formatter={(value) => `${value} reps`}
           />
 
           <LeaderboardSection
             title="Longest Streak"
+            subtitle="Most consecutive completed weeks."
             rows={streakLeaders}
             formatter={(value) => `${value} weeks`}
           />

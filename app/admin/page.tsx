@@ -136,26 +136,47 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <main className="p-6">
-        <div className="mx-auto max-w-5xl">Loading...</div>
+      <main className="squad-shell py-6">
+        <div className="squad-card p-6">Loading...</div>
       </main>
     );
   }
 
   return (
-    <main className="p-6">
-      <div className="mx-auto max-w-5xl">
+    <main className="squad-shell py-4 sm:py-6">
+      <div className="squad-page-stack">
         <AppNav />
 
-        <h1 className="mb-6 text-3xl font-bold">Admin</h1>
+        <section className="squad-card overflow-hidden p-5 sm:p-7">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="squad-label">Admin Controls</p>
+              <h1 className="squad-title mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+                Admin
+              </h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+                Set or update starting lift weights for any user in the squad.
+              </p>
+            </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+            <div className="rounded-2xl border border-white/8 bg-white/5 px-5 py-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                Users
+              </p>
+              <p className="mt-2 text-3xl font-bold">{profiles.length}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="squad-card p-5 sm:p-6">
           <div className="mb-6">
-            <label className="mb-2 block text-sm font-semibold">Select User</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-100">
+              Select User
+            </label>
             <select
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
+              className="squad-select"
             >
               <option value="">Choose a user</option>
               {profiles.map((profile) => (
@@ -166,36 +187,54 @@ export default function AdminPage() {
             </select>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {LIFTS.map((liftName) => (
-              <div key={liftName}>
-                <label className="mb-2 block text-sm font-semibold">{liftName}</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={weights[liftName] === 0 ? "" : weights[liftName]}
-                  onChange={(e) =>
-                    setWeights((current) => ({
-                      ...current,
-                      [liftName]: parseNumberInput(e.target.value),
-                    }))
-                  }
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3"
-                />
+              <div
+                key={liftName}
+                className="rounded-3xl border border-white/8 bg-white/4 p-4"
+              >
+                <label className="mb-3 block text-sm font-semibold text-slate-100">
+                  {liftName}
+                </label>
+
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    value={weights[liftName] === 0 ? "" : weights[liftName]}
+                    onChange={(e) =>
+                      setWeights((current) => ({
+                        ...current,
+                        [liftName]: parseNumberInput(e.target.value),
+                      }))
+                    }
+                    className="squad-input pr-12"
+                    placeholder="0"
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
+                    lb
+                  </span>
+                </div>
               </div>
             ))}
           </div>
 
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="mt-6 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save Starting Weights"}
-          </button>
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="squad-button squad-button-primary"
+            >
+              {saving ? "Saving..." : "Save Starting Weights"}
+            </button>
 
-          {message && <p className="mt-4 text-slate-300">{message}</p>}
-        </div>
+            {message && (
+              <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                {message}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </main>
   );
