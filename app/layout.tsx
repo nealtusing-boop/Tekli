@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import SplashScreen from "../components/SplashScreen";
 import AutoRefresh from "../components/AutoRefresh";
+import PullToRefresh from "../components/PullToRefresh";
 
 export const metadata: Metadata = {
   title: "Squad PT",
@@ -41,6 +42,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AutoRefresh />
+        <PullToRefresh />
         <SplashScreen />
         {children}
       </body>
