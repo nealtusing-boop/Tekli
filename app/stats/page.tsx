@@ -209,30 +209,13 @@ export default function StatsPage() {
         <section className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
           <div className="squad-card p-5 sm:p-6">
             <p className="squad-label">Streak</p>
-            <div className="mt-4 flex items-end justify-between gap-4">
-              <div>
-                <p className="text-5xl font-bold tracking-tight sm:text-6xl">
-                  {streak}
-                </p>
-                <p className="mt-2 text-base text-slate-300">
-                  {streak === 1 ? "day" : "days"}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-right">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">
-                  Active
-                </p>
-                <p className="mt-2 text-lg font-bold text-white">
-                  {streak === 0
-                    ? "Restart"
-                    : streak < 5
-                    ? "Building"
-                    : streak < 15
-                    ? "Strong"
-                    : "Locked In"}
-                </p>
-              </div>
+            <div className="mt-4">
+              <p className="text-5xl font-bold tracking-tight sm:text-6xl">
+                {streak}
+              </p>
+              <p className="mt-2 text-base text-slate-300">
+                {streak === 1 ? "day" : "days"}
+              </p>
             </div>
           </div>
 
@@ -294,26 +277,13 @@ export default function StatsPage() {
             {LIFTS.map((liftName) => {
               const lastWeight = latestLiftMap[liftName] ?? 0;
               const nextWeight = nextLiftMap[liftName] ?? 0;
-              const isMoving = nextWeight > lastWeight;
 
               return (
                 <div key={liftName} className="squad-card p-5 sm:p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">
-                        {liftName}
-                      </p>
-                    </div>
-
-                    <div
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        isMoving
-                          ? "bg-emerald-400/12 text-emerald-300"
-                          : "bg-white/6 text-slate-300"
-                      }`}
-                    >
-                      {isMoving ? "Progressing" : "Set"}
-                    </div>
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      {liftName}
+                    </p>
                   </div>
 
                   <div className="mt-6 grid grid-cols-2 gap-3">

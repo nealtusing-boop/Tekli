@@ -92,7 +92,6 @@ export default function ConditioningClient() {
 
   const alreadySubmitted = message.includes("already submitted");
   const isTimeWorkout = eventConfig.type === "time";
-  const totalSeconds = minutes * 60 + seconds;
   const totalAmrapReps = rounds * 45 + extraReps;
 
   const eventMeta = useMemo(() => {
@@ -101,6 +100,7 @@ export default function ConditioningClient() {
         return {
           badge: "Distance",
           badgeValue: "5 miles",
+          secondaryBadge: null,
           accent: "from-cyan-400/20 to-blue-500/15",
           helper: "Enter your finishing time.",
         };
@@ -108,13 +108,18 @@ export default function ConditioningClient() {
         return {
           badge: "Benchmark",
           badgeValue: "Murph",
+          secondaryBadge: null,
           accent: "from-blue-400/20 to-indigo-500/15",
           helper: "Enter your finishing time.",
         };
       case "ruck":
         return {
           badge: "Load",
-          badgeValue: "40 lb",
+          badgeValue: "40 lbs",
+          secondaryBadge: {
+            label: "Distance",
+            value: "4.5 miles",
+          },
           accent: "from-emerald-400/20 to-blue-500/15",
           helper: "Enter your finishing time.",
         };
@@ -123,6 +128,7 @@ export default function ConditioningClient() {
         return {
           badge: "Window",
           badgeValue: "15 min",
+          secondaryBadge: null,
           accent:
             eventKey === "amrap_1"
               ? "from-blue-400/20 to-cyan-500/15"
@@ -133,6 +139,7 @@ export default function ConditioningClient() {
         return {
           badge: "Workout",
           badgeValue: "Session",
+          secondaryBadge: null,
           accent: "from-blue-400/20 to-cyan-500/15",
           helper: "",
         };
@@ -296,15 +303,28 @@ export default function ConditioningClient() {
               </p>
             </div>
 
-            <div
-              className={`rounded-3xl border border-white/8 bg-gradient-to-br ${eventMeta.accent} px-5 py-4`}
-            >
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-300">
-                {eventMeta.badge}
-              </p>
-              <p className="mt-2 text-2xl font-bold text-white">
-                {eventMeta.badgeValue}
-              </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div
+                className={`rounded-3xl border border-white/8 bg-gradient-to-br ${eventMeta.accent} px-5 py-4`}
+              >
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-300">
+                  {eventMeta.badge}
+                </p>
+                <p className="mt-2 text-2xl font-bold text-white">
+                  {eventMeta.badgeValue}
+                </p>
+              </div>
+
+              {eventMeta.secondaryBadge && (
+                <div className="rounded-3xl border border-white/8 bg-white/4 px-5 py-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-300">
+                    {eventMeta.secondaryBadge.label}
+                  </p>
+                  <p className="mt-2 text-2xl font-bold text-white">
+                    {eventMeta.secondaryBadge.value}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -390,9 +410,6 @@ export default function ConditioningClient() {
                 <p className="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">
                   {String(minutes).padStart(2, "0")}:
                   {String(seconds).padStart(2, "0")}
-                </p>
-                <p className="mt-2 text-sm text-slate-400">
-                  Total seconds: {totalSeconds}
                 </p>
               </div>
             </div>
