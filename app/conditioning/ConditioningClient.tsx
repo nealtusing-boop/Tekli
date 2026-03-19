@@ -7,21 +7,6 @@ import { supabase } from "../../lib/supabase";
 import { CONDITIONING_EVENTS, ConditioningEventKey } from "../../lib/schedule";
 import { getWeekStartDate } from "../../lib/date";
 
-type ConditioningLogRow = {
-  id: string;
-  event_name: ConditioningEventKey;
-  score_type: "time" | "amrap";
-  week_start_date: string;
-  minutes: number | null;
-  seconds: number | null;
-  total_seconds: number | null;
-  rounds: number | null;
-  extra_reps: number | null;
-  total_reps: number | null;
-  effort_style: string | null;
-  notes: string | null;
-};
-
 function Stepper({
   label,
   value,
@@ -87,11 +72,9 @@ export default function ConditioningClient() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [userId, setUserId] = useState("");
   const [profileName, setProfileName] = useState("");
-  const [existingLogId, setExistingLogId] = useState<string | null>(null);
 
   const [minutes, setMinutes] = useState<number>(0);
   const [seconds, setSeconds] = useState<number>(0);
@@ -107,10 +90,10 @@ export default function ConditioningClient() {
   const eventConfig = CONDITIONING_EVENTS[eventKey];
   const weekStartDate = useMemo(() => getWeekStartDate(), []);
 
+  const alreadySubmitted = message.includes("already submitted");
   const isTimeWorkout = eventConfig.type === "time";
   const totalSeconds = minutes * 60 + seconds;
   const totalAmrapReps = rounds * 45 + extraReps;
-  const controlsDisabled = saving || deleting;
 
   const eventMeta = useMemo(() => {
     switch (eventKey) {
@@ -184,44 +167,24 @@ export default function ConditioningClient() {
 
       setUserId(user.id);
 
-      const [{ data: profile }, { data: existingLog }] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("profile_name")
-          .eq("id", user.id)
-          .single(),
-        supabase
-          .from("conditioning_logs")
-          .select(
-            "id, event_name, score_type, week_start_date, minutes, seconds, total_seconds, rounds, extra_reps, total_reps, effort_style, notes"
-          )
-          .eq("user_id", user.id)
-          .eq("week_start_date", weekStartDate)
-          .eq("event_name", eventKey)
-          .maybeSingle(),
-      ]);
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("profile_name")
+        .eq("id", user.id)
+        .single();
 
       setProfileName(profile?.profile_name || "");
 
-      const log = (existingLog || null) as ConditioningLogRow | null;
+      const { data: existingLog } = await supabase
+        .from("conditioning_logs")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("week_start_date", weekStartDate)
+        .eq("event_name", eventKey)
+        .maybeSingle();
 
-      if (log) {
-        setExistingLogId(log.id);
-        setMinutes(log.minutes || 0);
-        setSeconds(log.seconds || 0);
-        setRounds(log.rounds || 0);
-        setExtraReps(log.extra_reps || 0);
-        setEffortStyle(log.effort_style || "prescribed");
-        setNotes(log.notes || "");
-        setMessage("Existing log loaded. You can update or delete it.");
-      } else {
-        setExistingLogId(null);
-        setMinutes(0);
-        setSeconds(0);
-        setRounds(0);
-        setExtraReps(0);
-        setEffortStyle("prescribed");
-        setNotes("");
+      if (existingLog) {
+        setMessage("You already submitted this workout for this week.");
       }
 
       setLoading(false);
@@ -244,15 +207,6 @@ export default function ConditioningClient() {
     return next;
   }
 
-  function resetForm() {
-    setMinutes(0);
-    setSeconds(0);
-    setRounds(0);
-    setExtraReps(0);
-    setEffortStyle("prescribed");
-    setNotes("");
-  }
-
   async function handleSave() {
     if (!userId || !profileName) {
       setMessage("Could not load your profile.");
@@ -268,96 +222,44 @@ export default function ConditioningClient() {
           throw new Error("Seconds must be between 0 and 59.");
         }
 
-        const payload = {
+        const safeTotalSeconds = Math.max(0, minutes * 60 + seconds);
+
+        const { error } = await supabase.from("conditioning_logs").insert({
           user_id: userId,
           profile_name: profileName,
           event_name: eventKey,
-          score_type: "time" as const,
+          score_type: "time",
           week_start_date: weekStartDate,
           minutes,
           seconds,
-          total_seconds: Math.max(0, minutes * 60 + seconds),
-          rounds: null,
-          extra_reps: null,
-          total_reps: null,
-          effort_style: null,
-          notes: notes || null,
-        };
+          total_seconds: safeTotalSeconds,
+        });
 
-        if (existingLogId) {
-          const { error } = await supabase
-            .from("conditioning_logs")
-            .update(payload)
-            .eq("id", existingLogId);
-
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from("conditioning_logs")
-            .insert(payload);
-
-          if (error) throw error;
-
-          const { data: refreshedLog } = await supabase
-            .from("conditioning_logs")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("week_start_date", weekStartDate)
-            .eq("event_name", eventKey)
-            .maybeSingle();
-
-          setExistingLogId(refreshedLog?.id || null);
-        }
+        if (error) throw error;
       } else {
         if (extraReps < 0 || extraReps > 44) {
           throw new Error("Extra reps must be between 0 and 44.");
         }
 
-        const payload = {
+        const totalReps = rounds * 45 + extraReps;
+
+        const { error } = await supabase.from("conditioning_logs").insert({
           user_id: userId,
           profile_name: profileName,
           event_name: eventKey,
-          score_type: "amrap" as const,
+          score_type: "amrap",
           week_start_date: weekStartDate,
-          minutes: null,
-          seconds: null,
-          total_seconds: null,
           rounds,
           extra_reps: extraReps,
-          total_reps: rounds * 45 + extraReps,
+          total_reps: totalReps,
           effort_style: effortStyle,
           notes,
-        };
+        });
 
-        if (existingLogId) {
-          const { error } = await supabase
-            .from("conditioning_logs")
-            .update(payload)
-            .eq("id", existingLogId);
-
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from("conditioning_logs")
-            .insert(payload);
-
-          if (error) throw error;
-
-          const { data: refreshedLog } = await supabase
-            .from("conditioning_logs")
-            .select("id")
-            .eq("user_id", userId)
-            .eq("week_start_date", weekStartDate)
-            .eq("event_name", eventKey)
-            .maybeSingle();
-
-          setExistingLogId(refreshedLog?.id || null);
-        }
+        if (error) throw error;
       }
 
-      setMessage(
-        existingLogId ? "Conditioning workout updated." : "Conditioning workout saved."
-      );
+      setMessage("Conditioning workout saved.");
     } catch (error: unknown) {
       setMessage(
         error instanceof Error
@@ -366,40 +268,6 @@ export default function ConditioningClient() {
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!existingLogId) return;
-
-    const confirmed = window.confirm(
-      `Delete this saved conditioning log?\n\n${eventConfig.label}`
-    );
-
-    if (!confirmed) return;
-
-    setDeleting(true);
-    setMessage("");
-
-    try {
-      const { error } = await supabase
-        .from("conditioning_logs")
-        .delete()
-        .eq("id", existingLogId);
-
-      if (error) throw error;
-
-      setExistingLogId(null);
-      resetForm();
-      setMessage("Conditioning workout deleted.");
-    } catch (error: unknown) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to delete conditioning workout."
-      );
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -464,7 +332,7 @@ export default function ConditioningClient() {
         )}
 
         <section className="squad-card p-5 sm:p-6">
-          <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="mb-6 grid gap-3 sm:grid-cols-2">
             <div className="squad-stat-pill">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                 Athlete
@@ -482,15 +350,6 @@ export default function ConditioningClient() {
                 {isTimeWorkout ? "For time" : "AMRAP"}
               </p>
             </div>
-
-            <div className="squad-stat-pill">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                Log Status
-              </p>
-              <p className="mt-2 text-base font-semibold text-white">
-                {existingLogId ? "Saved log found" : "No saved log yet"}
-              </p>
-            </div>
           </div>
 
           {isTimeWorkout ? (
@@ -506,7 +365,7 @@ export default function ConditioningClient() {
                     setMinutes((current) => adjustValue(current, 1, 0))
                   }
                   minLabel="Min 0"
-                  disabled={controlsDisabled}
+                  disabled={saving || alreadySubmitted}
                 />
 
                 <Stepper
@@ -520,7 +379,7 @@ export default function ConditioningClient() {
                   }
                   minLabel="Min 0"
                   maxLabel="Max 59"
-                  disabled={controlsDisabled}
+                  disabled={saving || alreadySubmitted}
                 />
               </div>
 
@@ -550,7 +409,7 @@ export default function ConditioningClient() {
                     setRounds((current) => adjustValue(current, 1, 0))
                   }
                   minLabel="Min 0"
-                  disabled={controlsDisabled}
+                  disabled={saving || alreadySubmitted}
                 />
 
                 <Stepper
@@ -564,7 +423,7 @@ export default function ConditioningClient() {
                   }
                   minLabel="Min 0"
                   maxLabel="Max 44"
-                  disabled={controlsDisabled}
+                  disabled={saving || alreadySubmitted}
                 />
               </div>
 
@@ -584,7 +443,7 @@ export default function ConditioningClient() {
                 <button
                   type="button"
                   onClick={() => setEffortStyle("prescribed")}
-                  disabled={controlsDisabled}
+                  disabled={saving || alreadySubmitted}
                   className={`rounded-3xl border px-4 py-4 text-left transition ${
                     effortStyle === "prescribed"
                       ? "border-blue-400/40 bg-blue-500/12 text-white"
@@ -600,7 +459,7 @@ export default function ConditioningClient() {
                 <button
                   type="button"
                   onClick={() => setEffortStyle("scaled_modified")}
-                  disabled={controlsDisabled}
+                  disabled={saving || alreadySubmitted}
                   className={`rounded-3xl border px-4 py-4 text-left transition ${
                     effortStyle === "scaled_modified"
                       ? "border-blue-400/40 bg-blue-500/12 text-white"
@@ -626,38 +485,20 @@ export default function ConditioningClient() {
                   rows={5}
                   placeholder="List weights used, substitutions, or modifications."
                   className="squad-textarea"
-                  disabled={controlsDisabled}
+                  disabled={saving || alreadySubmitted}
                 />
               </div>
             </div>
           )}
 
-          <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={handleSave}
-                disabled={controlsDisabled}
-                className="squad-button squad-button-primary"
-              >
-                {saving
-                  ? existingLogId
-                    ? "Updating..."
-                    : "Saving..."
-                  : existingLogId
-                    ? "Update Workout"
-                    : "Save Workout"}
-              </button>
-
-              {existingLogId && (
-                <button
-                  onClick={handleDelete}
-                  disabled={controlsDisabled}
-                  className="squad-button squad-button-secondary"
-                >
-                  {deleting ? "Deleting..." : "Delete Saved Log"}
-                </button>
-              )}
-            </div>
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              onClick={handleSave}
+              disabled={saving || alreadySubmitted}
+              className="squad-button squad-button-primary"
+            >
+              {saving ? "Saving..." : "Save Workout"}
+            </button>
 
             {message && (
               <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">

@@ -25,25 +25,6 @@ type LiftSettingRow = {
   current_weight: number | null;
 };
 
-type StoredLiftLog = {
-  name?: string;
-  working_weight?: number;
-  set_count?: number;
-  sets?: number[];
-  completed?: boolean;
-  next_weight?: number;
-} | null;
-
-type StrengthLogRow = {
-  id: string;
-  workout_day: string;
-  week_start_date: string;
-  created_at?: string | null;
-  lift_1: StoredLiftLog;
-  lift_2: StoredLiftLog;
-  lift_3: StoredLiftLog;
-};
-
 function Stepper({
   label,
   value,
@@ -95,116 +76,35 @@ function Stepper({
   );
 }
 
-function calculateNextWeight(completed: boolean, current: number) {
-  if (!current || current <= 0) return 0;
-  return completed ? current + 10 : current;
-}
-
 function createLiftState(
   name: string,
   setCount: number,
   workingWeight: number
 ): LiftState {
-  const sets = Array(setCount).fill(0);
-  const completed = false;
-
   return {
     name,
     working_weight: workingWeight,
     set_count: setCount,
-    sets,
-    completed,
-    next_weight: calculateNextWeight(completed, workingWeight),
+    sets: Array(setCount).fill(0),
+    completed: false,
+    next_weight: workingWeight,
   };
 }
 
-function createLiftStateFromStoredLog(
-  fallbackName: string,
-  fallbackSetCount: number,
-  fallbackWeight: number,
-  storedLift: StoredLiftLog
-): LiftState {
-  const name = storedLift?.name || fallbackName;
-  const setCount = storedLift?.set_count || fallbackSetCount;
-  const workingWeight =
-    typeof storedLift?.working_weight === "number"
-      ? storedLift.working_weight
-      : fallbackWeight;
+function calculateNextWeight(
+  liftName: string,
+  completed: boolean,
+  current: number
+) {
+  if (!current || current <= 0) return 0;
 
-  const rawSets = Array.isArray(storedLift?.sets) ? storedLift.sets : [];
-  const sets = Array.from({ length: setCount }, (_, index) => {
-    const value = rawSets[index];
-    if (typeof value !== "number") return 0;
-    return Math.max(0, Math.min(5, value));
-  });
+  const upper = liftName.toUpperCase();
 
-  const completed = sets.every((rep) => rep >= 5);
-
-  return {
-    name,
-    working_weight: workingWeight,
-    set_count: setCount,
-    sets,
-    completed,
-    next_weight: calculateNextWeight(completed, workingWeight),
-  };
-}
-
-function getWorkoutSortValue(workoutDay: string) {
-  if (workoutDay === "monday") return 1;
-  if (workoutDay === "tuesday") return 2;
-  if (workoutDay === "thursday") return 3;
-  return 0;
-}
-
-function getWeekDateValue(weekStartDate: string) {
-  const value = new Date(`${weekStartDate}T00:00:00`).getTime();
-  return Number.isNaN(value) ? 0 : value;
-}
-
-function sortLogsNewest(rows: StrengthLogRow[]) {
-  return [...rows].sort((a, b) => {
-    const weekDiff =
-      getWeekDateValue(b.week_start_date) - getWeekDateValue(a.week_start_date);
-    if (weekDiff !== 0) return weekDiff;
-
-    const dayDiff =
-      getWorkoutSortValue(b.workout_day) - getWorkoutSortValue(a.workout_day);
-    if (dayDiff !== 0) return dayDiff;
-
-    const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
-    if (bCreated !== aCreated) return bCreated - aCreated;
-
-    return b.id.localeCompare(a.id);
-  });
-}
-
-function getStoredLiftNextWeight(storedLift: StoredLiftLog) {
-  if (!storedLift) return null;
-
-  if (typeof storedLift.next_weight === "number") {
-    return storedLift.next_weight;
+  if (upper.includes("SQUAT") || upper.includes("DEADLIFT")) {
+    return completed ? current + 10 : Math.max(0, current - 10);
   }
 
-  if (typeof storedLift.working_weight === "number") {
-    const rawSets = Array.isArray(storedLift.sets) ? storedLift.sets : [];
-    const setCount =
-      typeof storedLift.set_count === "number" && storedLift.set_count > 0
-        ? storedLift.set_count
-        : rawSets.length;
-
-    const sets = Array.from({ length: setCount }, (_, index) => {
-      const value = rawSets[index];
-      if (typeof value !== "number") return 0;
-      return Math.max(0, Math.min(5, value));
-    });
-
-    const completed = sets.length > 0 && sets.every((rep) => rep >= 5);
-    return calculateNextWeight(completed, storedLift.working_weight);
-  }
-
-  return null;
+  return completed ? current + 5 : Math.max(0, current - 5);
 }
 
 export default function StrengthClient() {
@@ -213,12 +113,9 @@ export default function StrengthClient() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [userId, setUserId] = useState("");
   const [profileName, setProfileName] = useState("");
-  const [existingLogId, setExistingLogId] = useState<string | null>(null);
-  const [baseWeights, setBaseWeights] = useState<Record<string, number>>({});
   const [lift1, setLift1] = useState<LiftState | null>(null);
   const [lift2, setLift2] = useState<LiftState | null>(null);
   const [lift3, setLift3] = useState<LiftState | null>(null);
@@ -231,253 +128,94 @@ export default function StrengthClient() {
   const workoutDefinition = STRENGTH_WORKOUTS[dayKey];
   const weekStartDate = useMemo(() => getWeekStartDate(), []);
 
-  function hydrateFromLog(
-    log: StrengthLogRow | null,
-    settingsMap: Record<string, number>
-  ) {
-    const first = workoutDefinition[0];
-    const second = workoutDefinition[1];
-    const third = workoutDefinition[2];
+  useEffect(() => {
+    async function loadPage() {
+      setLoading(true);
+      setMessage("");
 
-    if (log) {
-      setExistingLogId(log.id);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      setLift1(
-        first
-          ? createLiftStateFromStoredLog(
-              first.name,
-              first.setCount,
-              settingsMap[first.name] || 0,
-              log.lift_1
-            )
-          : null
-      );
-
-      setLift2(
-        second
-          ? createLiftStateFromStoredLog(
-              second.name,
-              second.setCount,
-              settingsMap[second.name] || 0,
-              log.lift_2
-            )
-          : null
-      );
-
-      setLift3(
-        third
-          ? createLiftStateFromStoredLog(
-              third.name,
-              third.setCount,
-              settingsMap[third.name] || 0,
-              log.lift_3
-            )
-          : null
-      );
-    } else {
-      setExistingLogId(null);
-
-      setLift1(
-        first
-          ? createLiftState(first.name, first.setCount, settingsMap[first.name] || 0)
-          : null
-      );
-
-      setLift2(
-        second
-          ? createLiftState(
-              second.name,
-              second.setCount,
-              settingsMap[second.name] || 0
-            )
-          : null
-      );
-
-      setLift3(
-        third
-          ? createLiftState(
-              third.name,
-              third.setCount,
-              settingsMap[third.name] || 0
-            )
-          : null
-      );
-    }
-  }
-
-  function hydrateFromLocalLifts(
-    localLift1: LiftState | null,
-    localLift2: LiftState | null,
-    localLift3: LiftState | null
-  ) {
-    setLift1(localLift1 ? { ...localLift1, sets: [...localLift1.sets] } : null);
-    setLift2(localLift2 ? { ...localLift2, sets: [...localLift2.sets] } : null);
-    setLift3(localLift3 ? { ...localLift3, sets: [...localLift3.sets] } : null);
-  }
-
-  async function fetchAllStrengthLogs(currentUserId: string) {
-    const { data, error } = await supabase
-      .from("strength_logs")
-      .select(
-        "id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3"
-      )
-      .eq("user_id", currentUserId);
-
-    if (error) throw error;
-    return (data || []) as StrengthLogRow[];
-  }
-
-  async function fetchDayLogs(currentUserId: string) {
-    const { data, error } = await supabase
-      .from("strength_logs")
-      .select(
-        "id, workout_day, week_start_date, created_at, lift_1, lift_2, lift_3"
-      )
-      .eq("user_id", currentUserId)
-      .eq("week_start_date", weekStartDate)
-      .eq("workout_day", dayKey);
-
-    if (error) throw error;
-    return (data || []) as StrengthLogRow[];
-  }
-
-  async function pickCanonicalDayLogAndDeleteDuplicates(
-    rows: StrengthLogRow[],
-    preferredId?: string | null
-  ) {
-    if (rows.length === 0) return null;
-
-    let keep: StrengthLogRow | undefined;
-
-    if (preferredId) {
-      keep = rows.find((row) => row.id === preferredId);
-    }
-
-    if (!keep) {
-      keep = sortLogsNewest(rows)[0];
-    }
-
-    const duplicateIds = rows
-      .filter((row) => row.id !== keep!.id)
-      .map((row) => row.id);
-
-    if (duplicateIds.length > 0) {
-      const { error } = await supabase
-        .from("strength_logs")
-        .delete()
-        .in("id", duplicateIds);
-
-      if (error) throw error;
-    }
-
-    return keep;
-  }
-
-  async function recomputeLiftSettingsFromLogs(
-    currentUserId: string,
-    fallbackForMissing?: Record<string, number>
-  ) {
-    const allLogs = await fetchAllStrengthLogs(currentUserId);
-    const sorted = sortLogsNewest(allLogs);
-    const latestByLift = new Map<string, number>();
-
-    for (const row of sorted) {
-      const lifts = [row.lift_1, row.lift_2, row.lift_3];
-
-      for (const storedLift of lifts) {
-        const name = storedLift?.name;
-        if (!name || latestByLift.has(name)) continue;
-
-        const nextWeight = getStoredLiftNextWeight(storedLift);
-        if (typeof nextWeight === "number") {
-          latestByLift.set(name, nextWeight);
-        }
+      if (!user) {
+        router.push("/login");
+        return;
       }
-    }
 
-    if (fallbackForMissing) {
-      Object.entries(fallbackForMissing).forEach(([name, weight]) => {
-        if (!latestByLift.has(name)) {
-          latestByLift.set(name, weight);
-        }
-      });
-    }
+      setUserId(user.id);
 
-    const rowsToUpsert = Array.from(latestByLift.entries()).map(
-      ([lift_name, current_weight]) => ({
-        user_id: currentUserId,
-        lift_name,
-        current_weight,
-      })
-    );
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("profile_name")
+        .eq("id", user.id)
+        .single();
 
-    if (rowsToUpsert.length > 0) {
-      const { error } = await supabase.from("lift_settings").upsert(rowsToUpsert, {
-        onConflict: "user_id,lift_name",
-      });
+      setProfileName(profile?.profile_name || "");
 
-      if (error) throw error;
-    }
-
-    const nextMap: Record<string, number> = {};
-    rowsToUpsert.forEach((row) => {
-      nextMap[row.lift_name] = row.current_weight;
-    });
-
-    return nextMap;
-  }
-
-  async function loadPage(preferredId?: string | null) {
-    setLoading(true);
-    setMessage("");
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-
-    setUserId(user.id);
-
-    const [{ data: profile }, { data: settings }] = await Promise.all([
-      supabase.from("profiles").select("profile_name").eq("id", user.id).single(),
-      supabase
+      const { data: settings } = await supabase
         .from("lift_settings")
         .select("lift_name, current_weight")
-        .eq("user_id", user.id),
-    ]);
+        .eq("user_id", user.id);
 
-    setProfileName(profile?.profile_name || "");
+      const settingsMap = new Map<string, number>();
 
-    const settingsMap: Record<string, number> = {};
-    (settings || []).forEach((row: LiftSettingRow) => {
-      settingsMap[row.lift_name] = row.current_weight || 0;
-    });
+      (settings || []).forEach((row: LiftSettingRow) => {
+        settingsMap.set(row.lift_name, row.current_weight || 0);
+      });
 
-    setBaseWeights(settingsMap);
+      const first = workoutDefinition[0];
+      const second = workoutDefinition[1];
+      const third = workoutDefinition[2];
 
-    const dayRows = await fetchDayLogs(user.id);
-    const canonicalLog = await pickCanonicalDayLogAndDeleteDuplicates(
-      dayRows,
-      preferredId
-    );
+      setLift1(
+        first
+          ? createLiftState(
+              first.name,
+              first.setCount,
+              settingsMap.get(first.name) || 0
+            )
+          : null
+      );
 
-    hydrateFromLog(canonicalLog, settingsMap);
+      setLift2(
+        second
+          ? createLiftState(
+              second.name,
+              second.setCount,
+              settingsMap.get(second.name) || 0
+            )
+          : null
+      );
 
-    if (canonicalLog) {
-      setMessage("Existing log loaded. You can update or delete it.");
+      setLift3(
+        third
+          ? createLiftState(
+              third.name,
+              third.setCount,
+              settingsMap.get(third.name) || 0
+            )
+          : null
+      );
+
+      const { data: existingLog } = await supabase
+        .from("strength_logs")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("week_start_date", weekStartDate)
+        .eq("workout_day", dayKey)
+        .maybeSingle();
+
+      if (existingLog) {
+        setMessage("You already submitted this workout for this week.");
+      }
+
+      setLoading(false);
     }
 
-    setLoading(false);
-  }
+    loadPage();
+  }, [dayKey, router, weekStartDate, workoutDefinition]);
 
-  useEffect(() => {
-    loadPage(existingLogId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dayKey, weekStartDate]);
+  const alreadySubmitted = message.includes("already submitted");
 
   function updateSet(
     lift: LiftState | null,
@@ -487,11 +225,16 @@ export default function StrengthClient() {
   ) {
     if (!lift) return;
 
+    const maxReps = 5;
     const nextSets = [...lift.sets];
-    nextSets[index] = Math.max(0, Math.min(5, value));
+    nextSets[index] = Math.max(0, Math.min(maxReps, value));
 
-    const completed = nextSets.every((rep) => rep >= 5);
-    const nextWeight = calculateNextWeight(completed, lift.working_weight);
+    const completed = nextSets.every((rep) => rep >= maxReps);
+    const nextWeight = calculateNextWeight(
+      lift.name,
+      completed,
+      lift.working_weight
+    );
 
     setLift({
       ...lift,
@@ -499,33 +242,6 @@ export default function StrengthClient() {
       completed,
       next_weight: nextWeight,
     });
-  }
-
-  function resetLiftsToDefaultWeights(nextWeights?: Record<string, number>) {
-    const weights = nextWeights || baseWeights;
-    const first = workoutDefinition[0];
-    const second = workoutDefinition[1];
-    const third = workoutDefinition[2];
-
-    setLift1(
-      first
-        ? createLiftState(first.name, first.setCount, weights[first.name] || 0)
-        : null
-    );
-    setLift2(
-      second
-        ? createLiftState(
-            second.name,
-            second.setCount,
-            weights[second.name] || 0
-          )
-        : null
-    );
-    setLift3(
-      third
-        ? createLiftState(third.name, third.setCount, weights[third.name] || 0)
-        : null
-    );
   }
 
   async function handleSave() {
@@ -537,64 +253,40 @@ export default function StrengthClient() {
     setSaving(true);
     setMessage("");
 
-    const localLift1 = lift1 ? { ...lift1, sets: [...lift1.sets] } : null;
-    const localLift2 = lift2 ? { ...lift2, sets: [...lift2.sets] } : null;
-    const localLift3 = lift3 ? { ...lift3, sets: [...lift3.sets] } : null;
-
     try {
       const strengthPayload = {
         user_id: userId,
         profile_name: profileName,
         week_start_date: weekStartDate,
         workout_day: dayKey,
-        lift_1: localLift1,
-        lift_2: localLift2,
-        lift_3: localLift3,
+        lift_1: lift1,
+        lift_2: lift2,
+        lift_3: lift3,
       };
 
-      let savedId = existingLogId;
+      const { error: logError } = await supabase
+        .from("strength_logs")
+        .insert(strengthPayload);
 
-      if (existingLogId) {
-        const { error } = await supabase
-          .from("strength_logs")
-          .update(strengthPayload)
-          .eq("id", existingLogId);
+      if (logError) throw logError;
 
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from("strength_logs")
-          .insert(strengthPayload)
-          .select("id");
-
-        if (error) throw error;
-        savedId = data?.[0]?.id || null;
-      }
-
-      const refreshedDayRows = await fetchDayLogs(userId);
-      const canonicalLog = await pickCanonicalDayLogAndDeleteDuplicates(
-        refreshedDayRows,
-        savedId
-      );
-
-      const fallbackForMissing: Record<string, number> = {};
-      [localLift1, localLift2, localLift3]
+      const upserts = [lift1, lift2, lift3]
         .filter((lift): lift is LiftState => Boolean(lift))
-        .forEach((lift) => {
-          fallbackForMissing[lift.name] = lift.working_weight;
+        .map((lift) => ({
+          user_id: userId,
+          lift_name: lift.name,
+          current_weight: lift.next_weight,
+        }));
+
+      const { error: settingsError } = await supabase
+        .from("lift_settings")
+        .upsert(upserts, {
+          onConflict: "user_id,lift_name",
         });
 
-      const nextSettingsMap = await recomputeLiftSettingsFromLogs(
-        userId,
-        fallbackForMissing
-      );
+      if (settingsError) throw settingsError;
 
-      setBaseWeights(nextSettingsMap);
-      setExistingLogId(savedId || canonicalLog?.id || null);
-
-      hydrateFromLocalLifts(localLift1, localLift2, localLift3);
-
-      setMessage(existingLogId ? "Strength workout updated." : "Strength workout saved.");
+      setMessage("Strength workout saved.");
     } catch (error: unknown) {
       setMessage(
         error instanceof Error ? error.message : "Failed to save strength workout."
@@ -604,57 +296,11 @@ export default function StrengthClient() {
     }
   }
 
-  async function handleDelete() {
-    if (!existingLogId) return;
-
-    const confirmed = window.confirm(
-      `Delete this saved strength log?\n\n${dayConfig.label}`
-    );
-
-    if (!confirmed) return;
-
-    setDeleting(true);
-    setMessage("");
-
-    try {
-      const deletedLiftFallbacks: Record<string, number> = {};
-      [lift1, lift2, lift3]
-        .filter((lift): lift is LiftState => Boolean(lift))
-        .forEach((lift) => {
-          deletedLiftFallbacks[lift.name] = lift.working_weight;
-        });
-
-      const { error } = await supabase
-        .from("strength_logs")
-        .delete()
-        .eq("id", existingLogId);
-
-      if (error) throw error;
-
-      const nextSettingsMap = await recomputeLiftSettingsFromLogs(
-        userId,
-        deletedLiftFallbacks
-      );
-
-      setBaseWeights(nextSettingsMap);
-      setExistingLogId(null);
-      resetLiftsToDefaultWeights(nextSettingsMap);
-      setMessage("Strength workout deleted.");
-    } catch (error: unknown) {
-      setMessage(
-        error instanceof Error ? error.message : "Failed to delete strength workout."
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   const lifts = [lift1, lift2, lift3].filter(
     (lift): lift is LiftState => Boolean(lift)
   );
 
   const amrapLink = dayConfig.amrapLink ?? null;
-  const controlsDisabled = saving || deleting;
 
   if (loading) {
     return (
@@ -677,8 +323,8 @@ export default function StrengthClient() {
                 {dayConfig.label}
               </h1>
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
-                Log each set for every lift. Complete all prescribed reps and the
-                next weight goes up by 10. Miss reps and the weight stays the same.
+                Log each set for every lift. If all reps are hit, the lift counts
+                as passed and the next weight increases automatically.
               </p>
             </div>
 
@@ -698,7 +344,7 @@ export default function StrengthClient() {
         </section>
 
         <section className="squad-card p-5 sm:p-6">
-          <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="mb-6 grid gap-3 sm:grid-cols-2">
             <div className="squad-stat-pill">
               <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
                 Athlete
@@ -714,15 +360,6 @@ export default function StrengthClient() {
               </p>
               <p className="mt-2 text-base font-semibold text-white">
                 {dayConfig.label}
-              </p>
-            </div>
-
-            <div className="squad-stat-pill">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                Log Status
-              </p>
-              <p className="mt-2 text-base font-semibold text-white">
-                {existingLogId ? "Saved log found" : "No saved log yet"}
               </p>
             </div>
           </div>
@@ -761,8 +398,8 @@ export default function StrengthClient() {
                     lift.set_count === 1
                       ? "md:grid-cols-1"
                       : lift.set_count === 5
-                        ? "md:grid-cols-2 xl:grid-cols-5"
-                        : "md:grid-cols-2"
+                      ? "md:grid-cols-2 xl:grid-cols-5"
+                      : "md:grid-cols-2"
                   }`}
                 >
                   {lift.sets.map((setValue, setIndex) => (
@@ -789,7 +426,7 @@ export default function StrengthClient() {
                         }
                       }}
                       maxReps={5}
-                      disabled={controlsDisabled}
+                      disabled={saving || alreadySubmitted}
                     />
                   ))}
                 </div>
@@ -817,32 +454,14 @@ export default function StrengthClient() {
             ))}
           </div>
 
-          <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={handleSave}
-                disabled={controlsDisabled}
-                className="squad-button squad-button-primary"
-              >
-                {saving
-                  ? existingLogId
-                    ? "Updating..."
-                    : "Saving..."
-                  : existingLogId
-                    ? "Update Workout"
-                    : "Save Workout"}
-              </button>
-
-              {existingLogId && (
-                <button
-                  onClick={handleDelete}
-                  disabled={controlsDisabled}
-                  className="squad-button squad-button-secondary"
-                >
-                  {deleting ? "Deleting..." : "Delete Saved Log"}
-                </button>
-              )}
-            </div>
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              onClick={handleSave}
+              disabled={saving || alreadySubmitted}
+              className="squad-button squad-button-primary"
+            >
+              {saving ? "Saving..." : "Save Workout"}
+            </button>
 
             {message && (
               <div className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3 text-sm text-slate-200">
